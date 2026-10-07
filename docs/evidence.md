@@ -21,13 +21,13 @@ Exact inspected upstream commits, licenses and relevant source files are recorde
 
 ## Hardware-independent checks
 
-The current implementation passed **62 tests across nine suites** through `scripts/test.sh`, without a printer, Bluetooth permission or queue changes. Coverage includes:
+The current implementation passed **64 tests across nine suites** through `scripts/test.sh`, without a printer, Bluetooth permission or queue changes. Coverage includes:
 
 - Literal independent TSPL expectations: dimensions, polarity, row padding, binary framing, media and final-chunk byte ordering.
 - Native raster fixtures: supported monochrome formats, malformed/truncated headers and rows, metadata consistency, limits, page order and copies.
 - Durable acceptance, private permissions, restart recovery, capture intent, terminal cleanup and conservative ambiguous outcomes.
 - Mock transport chunking, backpressure, bounded deadlines including preparation/settling, disconnects, cancellation and final-request failure/ownership.
-- Settings action serialization, actual login-state/pending-approval presentation, failed registration, window creation without owner commands, queue-action window return/user-close handling and visibility of old unresolved jobs.
+- Settings action serialization, actual login-state/pending-approval presentation, failed registration, window creation without owner commands, queue-action window return/user-close handling and a recovery-only Jobs menu that hides completed history while preserving all pending/failed/unknown work in order.
 - Confirmed bulk deletion, preservation without confirmation, whole-spool refusal for active/unrecovered unknown work, restart after clearing and preservation of files outside the job spool. UI tests never construct the owner coordinator or register login.
 - Fixed queue arguments and ownership checks; real loopback fragmentation, half-close, port conflict, stalled receive and user-only IPC.
 
@@ -51,6 +51,8 @@ The alpha.2 UI was inspected on macOS 15.7.9 in an isolated native preview using
 This validates layout and action presentation, not installed login/logout launch or physical printing. Those acceptance items remain separate below.
 
 For alpha.3, the installed alpha.2 queue repair was exercised with tester-entered administrator authorization: the queue was confirmed owned/installed afterward, the owner remained alive, Settings still existed in the background, and unrelated queue URIs/default-printer fingerprints were unchanged. Queue actions previously had no foreground return. A native controller test reproduced a lost Settings window during a simulated external authorization flow; the added completion return passed it and a user-close safeguard test. This simulation does not run privileged commands. The installed alpha.3 repair was then exercised with administrator approval: the operator confirmed Settings returned to the front, and native inspection showed it open afterward. The project queue remained owned/installed, earlier job records were retained, and unrelated queue/default fingerprints were unchanged. No synthetic physical-print acceptance test was requested for this UI update.
+
+For alpha.4, 64 hardware-independent tests and Apple raster conversion passed. An isolated native preview using the production menu source and synthetic in-memory records checked that completed-only history produces **Jobs (0)** with **No jobs need attention**, mixed history counts only the unresolved record, and **Clear All Jobs** remains enabled for hidden finished history. No real owner commands, job deletion, Bluetooth access or physical print ran in that preview. Job persistence, recovery and transport behavior are unchanged by this menu update.
 
 ## Physical results confirmed by a tester
 

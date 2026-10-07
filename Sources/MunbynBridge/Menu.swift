@@ -4,9 +4,8 @@ import BridgeCore
 @MainActor final class MenuController: NSObject,NSMenuDelegate {
     static func visibleJobs(_ jobs: [Job]) -> [Job] {
         let terminal: Set<JobState> = [.transmitted, .captured, .cancelled]
-        // Never bury a retained/uncertain job behind a limit on recent history.
+        // Keep recovery work visible; finished metadata belongs in diagnostics.
         return Array(jobs.filter { !terminal.contains($0.state) }.reversed())
-            + Array(jobs.filter { terminal.contains($0.state) }.suffix(10).reversed())
     }
     let coordinator: Coordinator
     private let item = NSStatusBar.system.statusItem(withLength:NSStatusItem.squareLength)
@@ -27,14 +26,14 @@ import BridgeCore
         add(menu,coordinator.printer.status,enabled:false)
         menu.addItem(.separator())
         let allJobs = coordinator.jobs()
-        let jobs = NSMenuItem(title:"Jobs (\(allJobs.count))",action:nil,keyEquivalent:""); let jobMenu = NSMenu()
+        let visible = Self.visibleJobs(allJobs)
+        let jobs = NSMenuItem(title:"Jobs (\(visible.count))",action:nil,keyEquivalent:""); let jobMenu = NSMenu()
         add(jobMenu,"Clear All Jobs…",request:.init(command:"clear-jobs",confirm:true),enabled:!allJobs.isEmpty)
         jobMenu.addItem(.separator())
         let stateTitles: [JobState: String] = [.queued: "Queued", .connecting: "Connecting", .sending: "Sending",
             .transmitted: "Transmitted (paper unconfirmed)", .captured: "Dry-run capture", .failedBeforeSend: "Failed before sending",
             .outcomeUnknown: "Outcome unknown — review required", .cancelled: "Cancelled"]
-        let visible = Self.visibleJobs(allJobs)
-        if visible.isEmpty { add(jobMenu,"No recent jobs",enabled:false) }
+        if visible.isEmpty { add(jobMenu,"No jobs need attention",enabled:false) }
         for job in visible {
             let row = NSMenuItem(title:"\(job.id.uuidString.prefix(8)): \(stateTitles[job.state] ?? job.state.rawValue), \(job.pages) labels",action:nil,keyEquivalent:""); let actions = NSMenu()
             if [.queued,.connecting,.sending,.failedBeforeSend].contains(job.state) { add(actions,"Cancel",request:.init(command:"cancel",value:job.id.uuidString)) }

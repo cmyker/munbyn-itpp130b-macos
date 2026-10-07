@@ -14,7 +14,7 @@ scripts/package-release.sh
 
 Packaging always invokes the native build, preserves embedded licenses, checks arm64 executables and creates a drag-and-drop DMG plus a ZIP fallback under `dist/releases/`. It extracts the ZIP and mounts the DMG read-only, checks signatures and full app-file equality, verifies installation notes/Applications link and writes SHA256SUMS. It does not launch the app, install a queue or access Bluetooth. `BUILD-INFO.txt` in the DMG records the version, source revision and signature category; a dirty checkout is visibly marked and must not be published.
 
-The version/channel come from the bundled Info.plist. Current packages use `0.1.0-alpha.3`; review all app/CLI/About version strings before changing it. Default signing is ad hoc. Only `MUNBYN_SIGNING_IDENTITY` explicitly selects another identity. This tool does not notarize or staple artifacts; do not describe a signature check as notarization. Never put signing material in source or untrusted CI.
+The version/channel come from the bundled Info.plist. Current packages use `0.1.0-alpha.4`; review all app/CLI/About version strings before changing it. Default signing is ad hoc. Only `MUNBYN_SIGNING_IDENTITY` explicitly selects another identity. This tool does not notarize or staple artifacts; do not describe a signature check as notarization. Never put signing material in source or untrusted CI.
 
 ## Publication checks
 

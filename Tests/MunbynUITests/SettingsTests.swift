@@ -94,7 +94,22 @@ import AppKit
         let completed = (1...30).map { index in
             Job(id: UUID(), state: .transmitted, created: Date(timeIntervalSince1970: Double(index)), pages: 1, bytes: 0, recoveryConfirmed: false)
         }
-        #expect(MenuController.visibleJobs([unknown] + completed).contains { $0.id == unknown.id })
+        #expect(MenuController.visibleJobs([unknown] + completed).map(\.id) == [unknown.id])
+    }
+    @Test func completedJobsDisappearFromTheMenu() {
+        let finished: [JobState] = [.transmitted, .captured, .cancelled]
+        let jobs = finished.map { state in
+            Job(id: UUID(), state: state, created: Date(), pages: 1, bytes: 0, recoveryConfirmed: false)
+        }
+        #expect(MenuController.visibleJobs(jobs).isEmpty)
+    }
+    @Test func pendingFailedAndUnknownJobsStayVisibleNewestFirst() {
+        let unresolved: [JobState] = [.queued, .connecting, .sending, .failedBeforeSend, .outcomeUnknown]
+        let jobs = unresolved.enumerated().map { index, state in
+            // Buffer recovery permits new work but does not settle an unknown print outcome.
+            Job(id: UUID(), state: state, created: Date(timeIntervalSince1970: Double(index)), pages: 1, bytes: 1, recoveryConfirmed: true)
+        }
+        #expect(MenuController.visibleJobs(jobs).map(\.id) == jobs.reversed().map(\.id))
     }
     @Test func readingSettingsDoesNotRegisterLoginOrRunPrinterCommands() {
         var actions = 0

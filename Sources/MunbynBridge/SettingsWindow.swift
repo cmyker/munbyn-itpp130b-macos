@@ -91,7 +91,7 @@ import BridgeCore
                 divider(), login,
                 note("Launch automatically when you log in. macOS may require approval."), loginStatus, loginApproval,
                 divider(), heading("About", size: 14),
-                note("Version 0.1.0-alpha.3 · Experimental\nIndependent open-source project, not affiliated with MUNBYN. Original code is MIT licensed."),
+                note("Version 0.1.0-alpha.4 · Experimental\nIndependent open-source project, not affiliated with MUNBYN. Original code is MIT licensed."),
                 button("Project and documentation…", .openSource)]
     }
 
