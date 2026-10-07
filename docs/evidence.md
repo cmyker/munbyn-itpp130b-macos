@@ -21,12 +21,13 @@ Exact inspected upstream commits, licenses and relevant source files are recorde
 
 ## Hardware-independent checks
 
-The current implementation passed **50 tests across eight suites** through `scripts/test.sh`, without a printer, Bluetooth permission or queue changes. Coverage includes:
+The current implementation passed **57 tests across nine suites** through `scripts/test.sh`, without a printer, Bluetooth permission or queue changes. Coverage includes:
 
 - Literal independent TSPL expectations: dimensions, polarity, row padding, binary framing, media and final-chunk byte ordering.
 - Native raster fixtures: supported monochrome formats, malformed/truncated headers and rows, metadata consistency, limits, page order and copies.
 - Durable acceptance, private permissions, restart recovery, capture intent, terminal cleanup and conservative ambiguous outcomes.
 - Mock transport chunking, backpressure, bounded deadlines including preparation/settling, disconnects, cancellation and final-request failure/ownership.
+- Settings action serialization, actual login-state/pending-approval presentation, failed registration, window creation without owner commands and visibility of old unresolved jobs. UI tests never construct the owner coordinator or register login.
 - Fixed queue arguments and ownership checks; real loopback fragmentation, half-close, port conflict, stalled receive and user-only IPC.
 
 A fresh source clone passed the tests and arm64 ad-hoc packaging. `scripts/build-app.sh` verified the signature and rejected non-system dynamic dependencies. Public CI runs tests, native conversion and packaging without installing a queue. Test-only Testing.framework deployment warnings do not establish macOS 13 coverage.
@@ -41,6 +42,12 @@ These are software integration results, separate from paper output:
 - The installed app's Bluetooth permission approval, explicit selection, service/characteristic validation, profile persistence and renewed permission after ad-hoc updates were exercised. Permission denial remains untested on hardware.
 - Queue installation succeeded with narrow administrator authorization, sharing disabled and the selected error policy. The installer did not modify the existing USB queue or request a default-printer change. Actual authorization denial and uninstall acceptance remain open.
 - Duplicate app invocation exited while the original owner/control endpoint remained available. SMAppService registration/unregistration was exercised; automatic launch after login/logout remains untested. Unavailable registration is reported rather than presented as enabled.
+
+## Settings UI validation
+
+The alpha.2 UI was inspected on macOS 15.7.9 in an isolated native preview using the production menu/settings source and an in-memory owner stub. General, Printer and Advanced controls were visible without clipped text. A failed login action restored the checkbox from actual service state; cancelling Dry Run and Test Label left their actions unapplied. The preview had no BLE owner, print listener, real spool, queue installer or login registration. A window-loading regression was reproduced and fixed, with a test that presents the window without owner commands.
+
+This validates layout and action presentation, not installed login/logout launch or physical printing. Those acceptance items remain separate below.
 
 ## Physical results confirmed by a tester
 

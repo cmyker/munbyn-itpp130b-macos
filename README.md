@@ -24,7 +24,7 @@ Get the **Apple Silicon alpha DMG** from [GitHub Releases](https://github.com/cm
 2. This alpha is **ad-hoc signed and not notarized**. If macOS blocks first launch, use its individual **System Settings → Privacy & Security → Open Anyway** approval only if you trust the release. See [Apple's instructions](https://support.apple.com/en-us/102445); managed Macs may restrict approval. Do not disable Gatekeeper or SIP globally.
 3. Follow **First start** below to allow Bluetooth, select the physical printer and install the separate queue. Downloading/copying the app does not install the queue automatically.
 
-The app must stay running in the owning user's logged-in session. **Start at Login** can register automatic startup when available, but login/logout acceptance remains open. There is currently no hidden service mode or print-triggered launch. The menu icon is the bridge's status/recovery interface, not a per-job application that must reopen documents. See [installation/uninstall notes](docs/INSTALL.txt) and [release verification](docs/releases.md).
+The app must stay running in the owning user's logged-in session. **Settings → General → Start at Login** can register automatic startup when available, but login/logout acceptance remains open. There is currently no hidden service mode or print-triggered launch. The menu icon is the bridge's status/recovery interface, not a per-job application that must reopen documents. See [installation/uninstall notes](docs/INSTALL.txt) and [release verification](docs/releases.md).
 
 ## Build and install from source
 
@@ -41,10 +41,12 @@ The build produces `dist/MUNBYN ITPP130B Bridge.app` and installs in `~/Applicat
 
 First start:
 
-1. Choose **Select Printer**, allow Bluetooth permission, and select your intended physical printer from the unfiltered scan. The app probes writable FFF2 and saves that peripheral identifier and its observed service privately. A common name or UUID alone is insufficient; selection is explicit and never falls back to another device.
-2. Enable **Dry Run** for initial synthetic tests. This explicitly writes sensitive local captures; it uses no Bluetooth.
-3. Choose **Repair / Install Printer Queue**. The app validates the PPD and starts its loopback listener before requesting the narrowly scoped queue change. macOS may ask for administrator authorization. Canceling leaves other printers untouched. Re-running repairs only the project-owned queue.
-4. After a physical calibration on your stock, disable Dry Run. Optionally enable **Start at Login** and check its actual approval state in System Settings. Login/logout launch has not passed acceptance; if registration reports unavailable, launch the app manually after login. The menu app must be running and its user logged in for jobs to arrive.
+1. Open **Settings → Printer → Select Printer…**, allow Bluetooth permission, and select your intended physical printer from the unfiltered scan. The app probes writable FFF2 and saves that peripheral identifier and its observed service privately. A common name or UUID alone is insufficient; selection is explicit and never falls back to another device.
+2. Enable **Settings → Advanced → Dry Run** for initial synthetic tests. This explicitly writes sensitive local captures; it uses no Bluetooth.
+3. Choose **Settings → Printer → Repair / Install Printer Queue…**. The app validates the PPD and starts its loopback listener before requesting the narrowly scoped queue change. macOS may ask for administrator authorization. Canceling leaves other printers untouched. Re-running repairs only the project-owned queue.
+4. After a physical calibration on your stock, disable Dry Run in **Settings → Advanced**. Optionally enable **Start at Login** in **Settings → General** and check its actual approval state in System Settings. Login/logout launch has not passed acceptance; if registration reports unavailable, launch the app manually after login. The menu app must be running and its user logged in for jobs to arrive.
+
+The menu keeps status, **Jobs**, **Release Printer**, **Settings…**, and **Quit** close at hand. Settings groups setup and testing under **Printer**, startup under **General**, and diagnostic options under **Advanced**. All retained/pending jobs stay visible in Jobs, followed by ten recent finished jobs. Closing Settings keeps the bridge running. A mixed Start at Login checkbox means macOS approval is pending; return from System Settings to refresh its actual state.
 
 ## Everyday printing
 
@@ -75,7 +77,7 @@ Jobs are validated and durably stored before the bridge closes the incoming stre
 
 ## Diagnostics and privacy
 
-Menu Diagnostics and `doctor` show redacted status and aggregate phase timings for the last job in the current app process. Transmission durations and call/byte counts also remain in bounded private job metadata after restart. They do not acknowledge physical printing. Active jobs declare a scoped macOS user activity; any latency improvement remains unverified. No document contents, tracking numbers, raster or TSPL data are logged by default. Data lives in owner-only `~/Library/Application Support/MunbynBridge` (directories 0700, files 0600). Pending/failed/unknown content is retained for explicit review, bounded to 32 unfinished jobs / 128 MiB bitmap accounting. Dry-run preference and each accepted job's capture/print destination persist across restart; changing the setting affects new jobs. A failed capture retains its source for review/retry. Finished content is removed; metadata is bounded to 64 records / 14 days. Dry-run captures are explicitly opt-in, sensitive, local, bounded to 32 folders / 128 MiB, and require ordinary deletion through **Delete Sensitive Captures**. Deletion is not secure SSD erasure. See [security](SECURITY.md) for the unauthenticated loopback boundary.
+**Settings → Advanced → Show Diagnostics…** and `doctor` show redacted status and aggregate phase timings for the last job in the current app process. Transmission durations and call/byte counts also remain in bounded private job metadata after restart. They do not acknowledge physical printing. Active jobs declare a scoped macOS user activity; any latency improvement remains unverified. No document contents, tracking numbers, raster or TSPL data are logged by default. Data lives in owner-only `~/Library/Application Support/MunbynBridge` (directories 0700, files 0600). Pending/failed/unknown content is retained for explicit review, bounded to 32 unfinished jobs / 128 MiB bitmap accounting. Dry-run preference and each accepted job's capture/print destination persist across restart; changing the setting affects new jobs. A failed capture retains its source for review/retry. Finished content is removed; metadata is bounded to 64 records / 14 days. Dry-run captures are explicitly opt-in, sensitive, local, bounded to 32 folders / 128 MiB, and require ordinary deletion through **Delete Sensitive Captures**. Deletion is not secure SSD erasure. See [security](SECURITY.md) for the unauthenticated loopback boundary.
 
 CLI, communicating with the existing app rather than owning another BLE connection:
 
@@ -103,7 +105,7 @@ CI builds/tests/packages on macOS without installing a queue. Integration of act
 
 ## Uninstall
 
-Review/cancel native CUPS pending jobs and bridge jobs first. Resolve unknown outcomes before deleting their records. Download users can turn off **Start at Login**, choose **Uninstall Project Queue…**, quit the app and move it to Trash; private data remains until explicit deletion. See [INSTALL.txt](docs/INSTALL.txt). No source checkout is needed for that route.
+Review/cancel native CUPS pending jobs and bridge jobs first. Resolve unknown outcomes before deleting their records. Download users can turn off **Settings → General → Start at Login**, choose **Settings → Printer → Remove Queue…**, quit the app and move it to Trash; private data remains until explicit deletion. See [INSTALL.txt](docs/INSTALL.txt). No source checkout is needed for that route.
 
 With a source checkout and the app running:
 
@@ -113,6 +115,6 @@ scripts/uninstall-app.sh --confirm
 scripts/uninstall-app.sh --confirm --delete-data
 ```
 
-This unregisters login, removes only the owned Bluetooth queue, quits the bridge, and removes the matching installed bundle. Pending jobs cause refusal. The default path is `~/Applications`; use `MUNBYN_APP_PATH` for another installed location. Data is retained unless `--delete-data` is supplied. No USB queue, global CUPS configuration, other app or printer is removed. Menu **Uninstall Project Queue…** is available independently.
+This unregisters login, removes only the owned Bluetooth queue, quits the bridge, and removes the matching installed bundle. Pending jobs cause refusal. The default path is `~/Applications`; use `MUNBYN_APP_PATH` for another installed location. Data is retained unless `--delete-data` is supplied. No USB queue, global CUPS configuration, other app or printer is removed. **Settings → Printer → Remove Queue…** is available independently.
 
 For development, start with [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md), then read the [roadmap](docs/roadmap.md), [architecture](docs/architecture.md), [protocol](docs/protocol.md), and [third-party attribution](THIRD_PARTY_NOTICES.md).

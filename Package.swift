@@ -9,4 +9,5 @@ let package = Package(
               .target(name: "BridgeCore", dependencies: ["CBridge"]),
               .executableTarget(name: "MunbynBridge", dependencies: ["BridgeCore"]),
               .executableTarget(name: "MunbynCLI", dependencies: ["BridgeCore"]),
-              .testTarget(name: "BridgeCoreTests", dependencies: ["BridgeCore", "CBridge"])])
+              .testTarget(name: "BridgeCoreTests", dependencies: ["BridgeCore", "CBridge"]),
+              .testTarget(name: "MunbynUITests", dependencies: ["MunbynBridge", "BridgeCore"])])

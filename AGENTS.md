@@ -48,7 +48,7 @@ These checks do not install a queue or access Bluetooth. The integration script 
 
 For downloadable artifacts, run `scripts/package-release.sh` and follow [docs/releases.md](docs/releases.md). It builds, extracts/verifies the ZIP, mounts/verifies the DMG and writes checksums without launching or installing the app. Keep artifacts in ignored `dist/releases/`; publication requires a reviewed source/tag and accurate prerelease/signing status.
 
-Installation is a separate action: `scripts/install-app.sh`, then launch the installed app and use **Repair Printer Queue**. Quit a running bridge before replacing its bundle. Do not install/uninstall queues, send labels, change Bluetooth settings or register login items merely to run automated tests.
+Installation is a separate action: `scripts/install-app.sh`, then launch the installed app and use **Settings → Printer → Repair / Install Printer Queue**. Quit a running bridge before replacing its bundle. Do not install/uninstall queues, send labels, change Bluetooth settings or register login items merely to run automated tests.
 
 ## Printing invariants
 
@@ -77,6 +77,10 @@ Installation is a separate action: `scripts/install-app.sh`, then launch the ins
 - Keep real documents, addresses, tracking data, profiles, device identifiers, captures and Bluetooth traces out of Git, issues and CI logs. Document captures require explicit local opt-in. Use ordinary-deletion wording, not secure-erasure promises.
 - Preserve third-party licenses/notices and exact upstream provenance. Do not redistribute proprietary drivers. Use signing identities only when explicitly configured; keep credentials out of source and untrusted CI.
 - Keep code, docs and UI in English. Update relevant docs when behavior or evidence changes, using generic workflows and anonymous test configurations rather than personal session transcripts.
+
+## Settings UI
+
+The compact menu keeps status, all unresolved Jobs plus recent finished jobs, Release Printer, Settings and Quit. `SettingsWindow.swift` is presentation; `SettingsModel.swift` serializes explicit actions and derives login checkbox state from macOS. Reuse the owner coordinator command path and its confirmations. Opening/refreshing Settings must not register login, scan BLE, print, install a queue or change capture intent. Pending approval is mixed, not enabled; failed/cancelled actions refresh actual state. UI model tests use injected snapshots/actions and no hardware or login registration.
 
 ## Open work
 

@@ -15,12 +15,12 @@ INSTALL
    to open it. Do not disable Gatekeeper or SIP globally. A managed Mac
    may prevent approval. See Apple's instructions:
    https://support.apple.com/en-us/102445
-4. Click the printer icon in the menu bar and choose Select Printer.
+4. Click the printer icon in the menu bar and open Settings > Printer > Select Printer.
    Allow Bluetooth permission; explicitly select your physical ITPP130B.
-5. Choose Repair / Install Printer Queue. Approve the administrator prompt
+5. In Settings > Printer, choose Repair / Install Printer Queue. Approve the administrator prompt
    if required. Only the separate Bluetooth queue is created; existing USB
    and default printer settings are not changed by the installer.
-6. Load matching stock and use One-label Test Print once. Inspect the
+6. Load matching stock and use Settings > Printer > Print Test Label once. Inspect the
    physical output before routine printing. Dry Run is available for
    synthetic software checks and creates sensitive local captures.
 
@@ -29,7 +29,7 @@ Keep the bridge running in your logged-in session. Open a label-sized PDF
 in Chrome or Preview and select MUNBYN ITPP130B (Bluetooth) in Cmd+P. Choose
 the matching 100 x 150 mm or 4 x 6 inch media. Chrome may require See more.
 No compilation, Terminal command, USB cable or separate label editor is
-required for normal printing. Start at Login is optional; check its actual
+required for normal printing. Settings > General > Start at Login is optional; check its actual
 registration state. Automatic login/logout launch is not yet validated.
 
 LIMITATIONS AND RECOVERY
@@ -44,10 +44,11 @@ the same job because output seems delayed.
 
 UNINSTALL WITHOUT A SOURCE CHECKOUT
 Review pending jobs and resolve uncertain printer state first. Turn off
-Start at Login if enabled, choose Uninstall Project Queue, then Quit. Move
+Start at Login in Settings > General if enabled. In Settings > Printer,
+choose Remove Queue, then Quit from the menu. Move
 the installed app to Trash. Private spool/settings remain in:
 ~/Library/Application Support/MunbynBridge
-Use Open Private Application Data to locate it before quitting. Delete
+Use Settings > Advanced > Open Private Application Data to locate it before quitting. Delete
 data only after review; ordinary deletion is not secure SSD erasure.
 
 SOURCE, VALIDATION AND LICENSES

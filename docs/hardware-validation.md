@@ -8,7 +8,7 @@ Coverage is limited to macOS 15.7.9 / Apple Silicon, one ITPP130B and 100 × 150
 
 | Test | Procedure / evidence required |
 | --- | --- |
-| Calibration | Menu Test Print once; inspect frame/polarity, measure the 200 × 16-dot bar end-to-end and margins. The original one-row ruler was too faint on subsequent labels; thickening the diagnostic does not change print layout. Record physical stock, printed ruler length, native dot pitch and clipping. Do not equate nominal 203 dpi to 8 dots/mm without measurement. |
+| Calibration | Settings → Printer → Print Test Label once; inspect frame/polarity, measure the 200 × 16-dot bar end-to-end and margins. The original one-row ruler was too faint on subsequent labels; thickening the diagnostic does not change print layout. Record physical stock, printed ruler length, native dot pitch and clipping. Do not equate nominal 203 dpi to 8 dots/mm without measurement. |
 | System ingress | Open generated PDF in Chrome and Preview; Cmd+P, select display name and media. First dry-run each. Record actual connection/page count and header contract, then physical result. `lp` is a separate integration result. |
 | Copies/orientation | Two identifiable source pages, two collated copies, landscape, exactly four labels in A/B/A/B order. Frame/text uncut, QR readable. Portrait single page separately. |
 | Media | Repeat geometry with matching 4 × 6 stock only when available; no claim from conversion alone. Verify native width, margins, label feed and gaps. |
