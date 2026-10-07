@@ -80,7 +80,7 @@ Installation is a separate action: `scripts/install-app.sh`, then launch the ins
 
 ## Settings UI
 
-The compact menu keeps status, all unresolved Jobs plus recent finished jobs, Release Printer, Settings and Quit. `SettingsWindow.swift` is presentation; `SettingsModel.swift` serializes explicit actions and derives login checkbox state from macOS. Reuse the owner coordinator command path and its confirmations. Opening/refreshing Settings must not register login, scan BLE, print, install a queue or change capture intent. Pending approval is mixed, not enabled; failed/cancelled actions refresh actual state. UI model tests use injected snapshots/actions and no hardware or login registration.
+The compact menu keeps status, all unresolved Jobs plus recent finished jobs, Release Printer, Settings and Quit. `SettingsWindow.swift` is presentation; `SettingsModel.swift` serializes explicit actions and derives login checkbox state from macOS. Reuse the owner coordinator command path and its confirmations. Opening/refreshing Settings must not register login, scan BLE, print, install a queue or change capture intent. Pending approval is mixed, not enabled; failed/cancelled actions refresh actual state. UI model tests use injected snapshots/actions and no hardware or login registration. Queue authorization completion returns an open Settings window to the foreground without reopening a deliberately closed/minimized window. **Jobs → Clear All Jobs** uses the owner command, explicit deletion warning, idle guard and whole-spool preflight; unrecovered unknown outcomes must block deletion before any record is removed. Captures and native Print Center jobs remain separate.
 
 ## Open work
 

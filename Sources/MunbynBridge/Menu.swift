@@ -26,11 +26,14 @@ import BridgeCore
         add(menu,coordinator.status,enabled:false)
         add(menu,coordinator.printer.status,enabled:false)
         menu.addItem(.separator())
-        let jobs = NSMenuItem(title:"Jobs (\(coordinator.jobs().count))",action:nil,keyEquivalent:""); let jobMenu = NSMenu()
+        let allJobs = coordinator.jobs()
+        let jobs = NSMenuItem(title:"Jobs (\(allJobs.count))",action:nil,keyEquivalent:""); let jobMenu = NSMenu()
+        add(jobMenu,"Clear All Jobs…",request:.init(command:"clear-jobs",confirm:true),enabled:!allJobs.isEmpty)
+        jobMenu.addItem(.separator())
         let stateTitles: [JobState: String] = [.queued: "Queued", .connecting: "Connecting", .sending: "Sending",
             .transmitted: "Transmitted (paper unconfirmed)", .captured: "Dry-run capture", .failedBeforeSend: "Failed before sending",
             .outcomeUnknown: "Outcome unknown — review required", .cancelled: "Cancelled"]
-        let visible = Self.visibleJobs(coordinator.jobs())
+        let visible = Self.visibleJobs(allJobs)
         if visible.isEmpty { add(jobMenu,"No recent jobs",enabled:false) }
         for job in visible {
             let row = NSMenuItem(title:"\(job.id.uuidString.prefix(8)): \(stateTitles[job.state] ?? job.state.rawValue), \(job.pages) labels",action:nil,keyEquivalent:""); let actions = NSMenu()
@@ -73,6 +76,7 @@ import BridgeCore
             "write-mode":request.value == "without-response" ? "Stream bulk data without response; send each page's last existing chunk with response and wait before releasing the link. Both write properties are required. This may reduce delay but requires a complete synthetic test label and QR scan before routine use. GATT responses do not confirm paper output. The setting is saved only for your selected printer." : "Use response writes for the selected printer. This can be slower. Availability is checked on connection.",
             "confirm-recovery":"Inspect the paper for partial/duplicate labels. A partial command may remain buffered. No software reset has been verified: power-cycle the printer before confirming. Cancel any matching job still pending in Print Center. This enables subsequent jobs.",
             "reprint":"The original may already have printed. This creates a new complete job and can produce duplicate labels. Do not also retry the original in Print Center.",
+            "clear-jobs":"This permanently deletes all bridge job records and their local files. Pending labels will be lost. Active work must be cancelled and uncertain printer-buffer recovery confirmed first. Print Center jobs and diagnostic captures are separate and remain unchanged. This does not reset the printer. Ordinary deletion is not secure SSD erasure.",
             "clear-captures":"This permanently deletes all local opt-in diagnostic document captures. Ordinary deletion is not secure SSD erasure.",
             "delete":"This permanently deletes this job's local files using ordinary file deletion. Pending labels will be lost. It is not secure SSD erasure.",
             "uninstall-queue":"Remove only MUNBYN ITPP130B (Bluetooth). Pending/uncertain jobs must be reviewed first. Other printers remain unchanged.",

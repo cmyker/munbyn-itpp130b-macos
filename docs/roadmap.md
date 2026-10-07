@@ -8,7 +8,7 @@ The project is an experimental alpha. This roadmap describes current capabilitie
 - Apple CUPS raster conversion, loopback socket ingress and a bounded system cupsRaster bridge.
 - Separate 100 × 150 mm and 4 × 6 inch media, monochrome conversion and binary-safe full-width TSPL.
 - Explicit BLE selection, mode-specific chunk limits, backpressure, pacing, final-chunk response and on-demand release.
-- Private durable spool, serialized jobs, cancellation, restart recovery and conservative unknown outcomes.
+- Private durable spool, serialized jobs, cancellation, restart recovery, conservative unknown outcomes and confirmed bulk job clearing with recovery preflight.
 - Compact status/recovery menu and native General/Printer/Advanced Settings window, including an explicit Start at Login checkbox with actual macOS approval state.
 - Queue ownership checks, repair/removal actions, dry-run capture and diagnostics.
 - Hardware-independent tests, native conversion checks, source-build packaging and CI.

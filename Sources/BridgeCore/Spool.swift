@@ -85,6 +85,18 @@ public final class Spool {
               job.state != .outcomeUnknown || job.recoveryConfirmed else { throw BridgeError.invalid("Deletion requires confirmation; active/uncertain printer state must be resolved first") }
         try FileManager.default.removeItem(at: folder(id)); try PrivateFiles.syncDirectory(root)
     }
+    public func clearAll(confirmed: Bool) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard confirmed else { throw BridgeError.invalid("Confirm deletion of all bridge job records and pending labels first") }
+        let all = try jobs()
+        // Check the whole snapshot before deleting any history. Clearing records
+        // must never discard the evidence that blocks unsafe printer reuse.
+        guard all.allSatisfy({ ![.connecting, .sending].contains($0.state) &&
+            ($0.state != .outcomeUnknown || $0.recoveryConfirmed) }) else {
+            throw BridgeError.invalid("Cancel active work and confirm uncertain printer-buffer recovery before clearing all jobs")
+        }
+        for job in all { try delete(job.id, confirmed: true) }
+    }
     public func cleanup() throws {
         lock.lock(); defer { lock.unlock() }
         let finished = try jobs().filter { [.transmitted,.captured,.cancelled].contains($0.state) }

@@ -309,3 +309,47 @@ extension SpoolTests {
         #expect(!FileManager.default.fileExists(atPath:s.root.appendingPathComponent(job.id.uuidString).appendingPathComponent("pages.json").path))
     }
 }
+
+extension SpoolTests {
+    @Test func clearAllRequiresConfirmationAndPreservesPendingPayload() throws {
+        let spool = try temporarySpool(); defer { try? FileManager.default.removeItem(at: spool.root) }
+        let job = try spool.accept(pages: [testPage])
+        expectThrows(try spool.clearAll(confirmed: false))
+        #expect(try spool.jobs().map(\.id) == [job.id])
+        #expect(try spool.pages(for: job.id) == [testPage])
+    }
+
+    @Test func clearAllDeletesReviewedHistoryAndPendingLabelsOnlyInsideSpool() throws {
+        let parent = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try PrivateFiles.directory(parent); defer { try? FileManager.default.removeItem(at: parent) }
+        let retainedSetting = parent.appendingPathComponent("setting.json")
+        try PrivateFiles.write(Data("private setting".utf8), to: retainedSetting)
+        let spool = try Spool(root: parent.appendingPathComponent("jobs"))
+        _ = try spool.accept(pages: [testPage])
+        let failed = try spool.accept(pages: [testPage]); try spool.transition(failed.id, to: .failedBeforeSend)
+        let finished = try spool.accept(pages: [testPage]); try spool.transition(finished.id, to: .captured)
+        let recovered = try spool.accept(pages: [testPage])
+        try spool.transition(recovered.id, to: .connecting); try spool.transition(recovered.id, to: .sending)
+        try spool.transition(recovered.id, to: .outcomeUnknown); try spool.confirmRecovery(recovered.id)
+        try spool.clearAll(confirmed: true)
+        #expect(try spool.jobs().isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: spool.root.path).isEmpty)
+        #expect(try PrivateFiles.read(retainedSetting) == Data("private setting".utf8))
+        let reopened = try Spool(root: spool.root); try reopened.recover()
+        #expect(try reopened.jobs().isEmpty)
+        try reopened.clearAll(confirmed: true)
+    }
+
+    @Test func clearAllPreflightsActiveAndUnrecoveredUnknownJobsBeforeDeletingAnyRecord() throws {
+        for state in [JobState.connecting, .sending, .outcomeUnknown] {
+            let spool = try temporarySpool(); defer { try? FileManager.default.removeItem(at: spool.root) }
+            let older = try spool.accept(pages: [testPage]); try spool.transition(older.id, to: .cancelled)
+            let blocked = try spool.accept(pages: [testPage]); try spool.transition(blocked.id, to: .connecting)
+            if state != .connecting { try spool.transition(blocked.id, to: .sending) }
+            if state == .outcomeUnknown { try spool.transition(blocked.id, to: .outcomeUnknown) }
+            expectThrows(try spool.clearAll(confirmed: true))
+            #expect(try Set(spool.jobs().map(\.id)) == Set([older.id, blocked.id]))
+            #expect(try spool.pages(for: blocked.id) == [testPage])
+        }
+    }
+}

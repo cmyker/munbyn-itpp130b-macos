@@ -16,6 +16,7 @@ import BridgeCore
     private let progress = NSProgressIndicator()
     private var actionButtons: [NSButton] = []
     private let tabs = NSTabView()
+    private var isPresented = false
 
     init(_ model: SettingsModel) {
         self.model = model
@@ -56,11 +57,13 @@ import BridgeCore
         // init(window: nil) marks a nibless controller loaded without a window;
         // showWindow alone will not call our programmatic loadWindow override.
         if window == nil { loadWindow() }
+        isPresented = true
         showWindow(nil); refresh()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
     func windowDidBecomeKey(_ notification: Notification) { refresh() }
+    func windowWillClose(_ notification: Notification) { isPresented = false }
 
     func refresh() {
         guard isWindowLoaded, window != nil else { return }
@@ -88,7 +91,7 @@ import BridgeCore
                 divider(), login,
                 note("Launch automatically when you log in. macOS may require approval."), loginStatus, loginApproval,
                 divider(), heading("About", size: 14),
-                note("Version 0.1.0-alpha.2 · Experimental\nIndependent open-source project, not affiliated with MUNBYN. Original code is MIT licensed."),
+                note("Version 0.1.0-alpha.3 · Experimental\nIndependent open-source project, not affiliated with MUNBYN. Original code is MIT licensed."),
                 button("Project and documentation…", .openSource)]
     }
 
@@ -169,7 +172,18 @@ import BridgeCore
     }
     @objc private func action(_ sender: NSButton) {
         guard let id = sender.identifier, let action = actions[id] else { return }
-        Task { await model.run(action) }
+        Task {
+            guard !model.isPerforming else { return }
+            await model.run(action)
+            // Authorization UI can leave an accessory app behind other windows.
+            // Return only for queue actions and never reopen a user-closed/minimized window.
+            if case let .command(request, _) = action,
+               ["install-queue", "uninstall-queue"].contains(request.command),
+               isPresented, window?.isMiniaturized == false {
+                NSApp.unhide(nil)
+                present()
+            }
+        }
     }
     @objc private func toggleLogin() { Task { await model.toggleLogin() } }
     @objc private func testPrint() {

@@ -3,6 +3,7 @@ import AppKit
 @testable import BridgeCore
 @testable import MunbynBridge
 
+@Suite(.serialized)
 @MainActor struct SettingsTests {
     @Test func settingsPresentationCreatesAWindowWithoutOwnerCommands() throws {
         let app = NSApplication.shared
@@ -20,6 +21,74 @@ import AppKit
         controller.refresh()
         #expect(actions == 0)
     }
+    @Test func queueRepairReturnsToSettingsAfterExternalAuthorizationHidesIt() async throws {
+        let app = NSApplication.shared
+        let previous = app.activationPolicy()
+        app.setActivationPolicy(.prohibited)
+        defer { app.setActivationPolicy(previous) }
+        var authorizationWindow: NSWindow?
+        var requested = 0
+        var disappeared = false
+        let model = SettingsModel(snapshot: { SettingsSnapshot(login: .notRegistered) }, perform: { action in
+            if case let .command(request, _) = action, request.command == "install-queue" {
+                requested += 1
+                // Simulate the external authorization flow obscuring this app's window.
+                // No queue operation, password prompt or privileged command runs.
+                authorizationWindow?.orderOut(nil)
+                disappeared = authorizationWindow?.isVisible == false
+            }
+        })
+        let controller = SettingsWindowController(model)
+        defer { controller.close() }
+        controller.present()
+        authorizationWindow = controller.window
+        let content = try #require(controller.window?.contentView)
+        let tabs = try #require(content.subviews.compactMap { $0 as? NSTabView }.first)
+        tabs.selectTabViewItem(withIdentifier: "Printer")
+        let repair = try #require(findButton("Repair / Install Printer Queue…", in: content))
+        repair.performClick(nil)
+        for _ in 0..<10_000 where requested == 0 || model.isPerforming { await Task.yield() }
+        try #require(requested == 1 && !model.isPerforming)
+        #expect(disappeared)
+        #expect(controller.window?.isVisible == true)
+    }
+
+    @Test func queueRepairDoesNotReopenSettingsClosedDuringAuthorization() async throws {
+        let app = NSApplication.shared
+        let previous = app.activationPolicy()
+        app.setActivationPolicy(.prohibited)
+        defer { app.setActivationPolicy(previous) }
+        var continuation: CheckedContinuation<Void, Never>?
+        let model = SettingsModel(snapshot: { SettingsSnapshot(login: .notRegistered) }, perform: { action in
+            if case let .command(request, _) = action, request.command == "install-queue" {
+                await withCheckedContinuation { continuation = $0 }
+            }
+        })
+        let controller = SettingsWindowController(model)
+        defer { controller.close() }
+        controller.present()
+        let content = try #require(controller.window?.contentView)
+        let tabs = try #require(content.subviews.compactMap { $0 as? NSTabView }.first)
+        tabs.selectTabViewItem(withIdentifier: "Printer")
+        let repair = try #require(findButton("Repair / Install Printer Queue…", in: content))
+        repair.performClick(nil)
+        for _ in 0..<10_000 where continuation == nil { await Task.yield() }
+        try #require(continuation != nil)
+        controller.close()
+        continuation?.resume()
+        for _ in 0..<10_000 where model.isPerforming { await Task.yield() }
+        try #require(!model.isPerforming)
+        #expect(controller.window?.isVisible == false)
+    }
+
+    private func findButton(_ title: String, in view: NSView) -> NSButton? {
+        if let button = view as? NSButton, button.title == title { return button }
+        for child in view.subviews {
+            if let button = findButton(title, in: child) { return button }
+        }
+        return nil
+    }
+
     @Test func oldUnknownJobRemainsVisibleAfterManyCompletedJobs() {
         let unknown = Job(id: UUID(), state: .outcomeUnknown, created: Date(timeIntervalSince1970: 0), pages: 1, bytes: 1, recoveryConfirmed: false)
         let completed = (1...30).map { index in
