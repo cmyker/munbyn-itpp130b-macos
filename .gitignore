@@ -1,0 +1,10 @@
+.build/
+dist/
+.superpowers/
+.DS_Store
+*.xcuserstate
+private/
+diagnostics/
+*.cupsraster
+*.tspl
+*.pbm

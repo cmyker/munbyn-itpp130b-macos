@@ -1,0 +1,25 @@
+name: Native build and synthetic tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Environment
+        run: |
+          sw_vers
+          swift --version
+          uname -m
+      - name: Hardware-independent tests
+        run: scripts/test.sh
+      - name: Apple raster conversion (no queue or BLE)
+        run: scripts/integration-dry-run.sh
+      - name: Package Apple Silicon ad-hoc development app
+        run: scripts/build-app.sh
