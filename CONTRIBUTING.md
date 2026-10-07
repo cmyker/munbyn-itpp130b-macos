@@ -6,6 +6,8 @@ Build with an Apple Swift 6 compiler on Apple Silicon macOS. For source changes,
 
 Keep each pull request focused. Explain the problem, resulting behavior, checks actually run and remaining limitations. Link any relevant issue and update the affected architecture/protocol/validation documents. Describe public workflows generically and use anonymous test configurations.
 
+Release packaging and publication checks are documented in [docs/releases.md](docs/releases.md). Packaging checks are safe for CI; installing/running the downloaded app and physical acceptance are separate tests. Downloads must remain prereleases while reliability acceptance is open.
+
 Keep raster decoding, TSPL encoding, BLE transport and ingress/job management separate. State transitions must persist write intent before the first possible printer write. Never auto-replay uncertain work or infer device status from a generic successful write. Do not add characteristic/device fallback, retries after a possible write, Phomemo flow control, content cropping or unmeasured maximum-throughput pacing.
 
 Provide independent expected-byte encoder fixtures and useful failure tests, rather than testing an encoder solely with a matching decoder. For hardware changes record OS/firmware where obtainable, procedure, label budget and observed paper result. Mark tester-confirmed and directly observed results separately. A BLE write/preview is not physical evidence. Do not broaden support to another model without an explicit decision and unit-specific protocol evidence.

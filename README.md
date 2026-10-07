@@ -16,6 +16,16 @@ No label editor, automatic A4 extraction/cropping, browser extension, LAN sharin
 
 Deployment target is macOS 13. Builds and local integration have been exercised on **macOS 15.7.9, Apple Silicon, Swift 6.2.4, SDK 26.2, Apple CUPS 2.3.4**. macOS 13/14, Intel and universal packages are not validated. Building needs an Apple Swift 6 compiler and macOS SDK (Xcode or Command Line Tools). Normal use needs no Homebrew, Python, Node or separately installed runtime.
 
+## Download and install
+
+Get the **Apple Silicon alpha DMG** from [GitHub Releases](https://github.com/cmyker/munbyn-itpp130b-macos/releases). A ZIP fallback and SHA256SUMS are provided too. No compilation or developer tools are needed to use the download. Intel Macs and other MUNBYN models are not supported by this release.
+
+1. Quit any existing bridge, open the DMG and drag **MUNBYN ITPP130B Bridge.app** to **Applications**. Eject the DMG and open the installed app. ZIP users can extract and copy the app instead.
+2. This alpha is **ad-hoc signed and not notarized**. If macOS blocks first launch, use its individual **System Settings → Privacy & Security → Open Anyway** approval only if you trust the release. See [Apple's instructions](https://support.apple.com/en-us/102445); managed Macs may restrict approval. Do not disable Gatekeeper or SIP globally.
+3. Follow **First start** below to allow Bluetooth, select the physical printer and install the separate queue. Downloading/copying the app does not install the queue automatically.
+
+The app must stay running in the owning user's logged-in session. **Start at Login** can register automatic startup when available, but login/logout acceptance remains open. There is currently no hidden service mode or print-triggered launch. The menu icon is the bridge's status/recovery interface, not a per-job application that must reopen documents. See [installation/uninstall notes](docs/INSTALL.txt) and [release verification](docs/releases.md).
+
 ## Build and install from source
 
 ```sh
@@ -33,7 +43,7 @@ First start:
 
 1. Choose **Select Printer**, allow Bluetooth permission, and select your intended physical printer from the unfiltered scan. The app probes writable FFF2 and saves that peripheral identifier and its observed service privately. A common name or UUID alone is insufficient; selection is explicit and never falls back to another device.
 2. Enable **Dry Run** for initial synthetic tests. This explicitly writes sensitive local captures; it uses no Bluetooth.
-3. Choose **Repair Printer Queue**. The app validates the PPD and starts its loopback listener before requesting the narrowly scoped queue change. macOS may ask for administrator authorization. Canceling leaves other printers untouched. Re-running repairs only the project-owned queue.
+3. Choose **Repair / Install Printer Queue**. The app validates the PPD and starts its loopback listener before requesting the narrowly scoped queue change. macOS may ask for administrator authorization. Canceling leaves other printers untouched. Re-running repairs only the project-owned queue.
 4. After a physical calibration on your stock, disable Dry Run. Optionally enable **Start at Login** and check its actual approval state in System Settings. Login/logout launch has not passed acceptance; if registration reports unavailable, launch the app manually after login. The menu app must be running and its user logged in for jobs to arrive.
 
 ## Everyday printing
@@ -70,7 +80,7 @@ Menu Diagnostics and `doctor` show redacted status and aggregate phase timings f
 CLI, communicating with the existing app rather than owning another BLE connection:
 
 ```sh
-cli="$HOME/Applications/MUNBYN ITPP130B Bridge.app/Contents/MacOS/munbyn-bridge"
+cli="/Applications/MUNBYN ITPP130B Bridge.app/Contents/MacOS/munbyn-bridge"
 "$cli" doctor
 "$cli" scan
 "$cli" status
@@ -79,6 +89,8 @@ cli="$HOME/Applications/MUNBYN ITPP130B Bridge.app/Contents/MacOS/munbyn-bridge"
 ```
 
 `scan` reveals local peripheral identifiers; do not upload its output. Other commands include `select`, `test-print`, `install-queue`, `uninstall-queue --confirm`, `cancel`, `retry`, `confirm-recovery`, `reprint`, `delete`, `dry-run`, `clear-captures`, bounded per-run `pacing CHUNK,DELAY_SECONDS`, saved `write-mode with-response|without-response`, `login` and `quit`. Offline `raster-info PATH` and `capture PATH PRIVATE_OUTPUT` never access Bluetooth. Never commit a real shipping label or a diagnostic capture.
+
+For the source install script's default location, use `$HOME/Applications` instead of `/Applications` in the CLI path. Normal printing needs no CLI command.
 
 ## Testing
 
@@ -91,7 +103,9 @@ CI builds/tests/packages on macOS without installing a queue. Integration of act
 
 ## Uninstall
 
-Review/cancel native CUPS pending jobs and bridge jobs first. Resolve unknown outcomes before deleting their records. With the app running:
+Review/cancel native CUPS pending jobs and bridge jobs first. Resolve unknown outcomes before deleting their records. Download users can turn off **Start at Login**, choose **Uninstall Project Queue…**, quit the app and move it to Trash; private data remains until explicit deletion. See [INSTALL.txt](docs/INSTALL.txt). No source checkout is needed for that route.
+
+With a source checkout and the app running:
 
 ```sh
 scripts/uninstall-app.sh --confirm
@@ -99,6 +113,6 @@ scripts/uninstall-app.sh --confirm
 scripts/uninstall-app.sh --confirm --delete-data
 ```
 
-This unregisters login, removes only the owned Bluetooth queue, quits the bridge, and removes the matching installed bundle. Pending jobs cause refusal. The default path is `~/Applications`; use `MUNBYN_APP_PATH` for another installed location. Data is retained unless `--delete-data` is supplied. No USB queue, global CUPS configuration, other app or printer is removed. Menu **Remove Printer Queue** is available independently.
+This unregisters login, removes only the owned Bluetooth queue, quits the bridge, and removes the matching installed bundle. Pending jobs cause refusal. The default path is `~/Applications`; use `MUNBYN_APP_PATH` for another installed location. Data is retained unless `--delete-data` is supplied. No USB queue, global CUPS configuration, other app or printer is removed. Menu **Uninstall Project Queue…** is available independently.
 
 For development, start with [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md), then read the [roadmap](docs/roadmap.md), [architecture](docs/architecture.md), [protocol](docs/protocol.md), and [third-party attribution](THIRD_PARTY_NOTICES.md).

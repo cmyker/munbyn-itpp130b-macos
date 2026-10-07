@@ -46,6 +46,8 @@ scripts/build-app.sh
 
 These checks do not install a queue or access Bluetooth. The integration script generates synthetic PDFs and uses Apple's converter. Packaging creates `dist/MUNBYN ITPP130B Bridge.app`, signs ad hoc by default and checks for accidental developer-library dependencies. CI runs the same commands with read-only repository permissions.
 
+For downloadable artifacts, run `scripts/package-release.sh` and follow [docs/releases.md](docs/releases.md). It builds, extracts/verifies the ZIP, mounts/verifies the DMG and writes checksums without launching or installing the app. Keep artifacts in ignored `dist/releases/`; publication requires a reviewed source/tag and accurate prerelease/signing status.
+
 Installation is a separate action: `scripts/install-app.sh`, then launch the installed app and use **Repair Printer Queue**. Quit a running bridge before replacing its bundle. Do not install/uninstall queues, send labels, change Bluetooth settings or register login items merely to run automated tests.
 
 ## Printing invariants

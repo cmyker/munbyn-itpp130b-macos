@@ -23,3 +23,5 @@ jobs:
         run: scripts/integration-dry-run.sh
       - name: Package Apple Silicon ad-hoc development app
         run: scripts/build-app.sh
+      - name: Verify downloadable DMG and ZIP (no installation)
+        run: scripts/package-release.sh
