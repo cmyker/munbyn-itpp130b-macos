@@ -156,9 +156,10 @@ import BridgeCore
     func command(_ request: ControlRequest) async throws -> Data {
         switch request.command {
         case "status","doctor":
-            let inspection = await Task.detached { Result { try QueueInstaller.snapshot() } }.value
+            let server = QueuePlan.selectServer()
+            let inspection = await Task.detached { Result { try QueueInstaller.snapshot(server: server) } }.value
             let snapshot = (try? inspection.get()) ?? nil
-            var inspectionDescription = "inspected \(QueuePlan.server)"
+            var inspectionDescription = "inspected \(server)"
             if case .failure = inspection { inspectionDescription = "unavailable; ownership unknown" }
             var transmission: Any = NSNull()
             if let metrics = lastTransmissionMetrics,let data = try? JSONEncoder().encode(metrics),let object = try? JSONSerialization.jsonObject(with:data) { transmission = object }
