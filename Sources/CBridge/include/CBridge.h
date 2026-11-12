@@ -8,7 +8,8 @@ int mb_raster_header(MBReader *, cups_page_header2_t *);
 unsigned mb_raster_pixels(MBReader *, unsigned char *, unsigned);
 void mb_raster_close(MBReader *);
 #include <cups/cups.h>
-int mb_queue_snapshot(const char *name,char *location,size_t location_size,char *uri,size_t uri_size);
+int mb_queue_snapshot(const char *server,const char *name,char *location,size_t location_size,char *uri,size_t uri_size);
+const char *mb_cups_host_for(int socket_present);
 const char *mb_cups_host(void);
 int mb_queue_status(ipp_status_t status,int response_received);
 int mb_lpadmin_authorized(char *const *arguments);

@@ -6,6 +6,7 @@
 #include <poll.h>
 #include <errno.h>
 #include <time.h>
+#include <sys/stat.h>
 
 struct MBReader {
     int fd, eof, failed;
@@ -71,14 +72,29 @@ unsigned mb_raster_pixels(MBReader *ctx,unsigned char *dst,unsigned length) {
 void mb_raster_close(MBReader *ctx) {
     if (ctx) { cupsRasterClose(ctx->raster); free(ctx); }
 }
-const char *mb_cups_host(void) { return "localhost"; }
+// cupsd only gets peer creds over its domain socket. loopback tcp is the fallback when it's absent
+// tcp fallback pins 631, bare localhost makes libcups use ippPort() which IPP_PORT can override
+#define MB_CUPS_SOCKET "/private/var/run/cupsd"
+#define MB_CUPS_TCP_HOST "localhost"
+#define MB_CUPS_TCP_PORT 631
+#define MB_CUPS_TCP "localhost:631"
+const char *mb_cups_host_for(int socket_present) { return socket_present ? MB_CUPS_SOCKET : MB_CUPS_TCP; }
+// probe once per install/rm and pass it down, no re-probe between steps
+const char *mb_cups_host(void) {
+    struct stat st;
+    return mb_cups_host_for(stat(MB_CUPS_SOCKET,&st) == 0 && S_ISSOCK(st.st_mode));
+}
 int mb_queue_status(ipp_status_t status,int response_received) {
     if (status == IPP_STATUS_ERROR_NOT_FOUND) return 0;
     return response_received && status < IPP_STATUS_ERROR_BAD_REQUEST ? 1 : -1;
 }
-int mb_queue_snapshot(const char *name,char *location,size_t location_size,char *uri,size_t uri_size) {
+int mb_queue_snapshot(const char *server,const char *name,char *location,size_t location_size,char *uri,size_t uri_size) {
     if (!name || !*name || strlen(name) > 128 || strspn(name,"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_") != strlen(name)) return -1;
-    http_t *http = httpConnect2(mb_cups_host(),631,NULL,AF_UNSPEC,HTTP_ENCRYPTION_IF_REQUESTED,1,5000,NULL);
+    // only the 2 local endpoints from mb_cups_host(), anything else is refused
+    if (!server) return -1;
+    int via_socket = strcmp(server,MB_CUPS_SOCKET) == 0;
+    if (!via_socket && strcmp(server,MB_CUPS_TCP) != 0) return -1;
+    http_t *http = httpConnect2(via_socket ? MB_CUPS_SOCKET : MB_CUPS_TCP_HOST,MB_CUPS_TCP_PORT,NULL,AF_UNSPEC,HTTP_ENCRYPTION_IF_REQUESTED,1,5000,NULL);
     if (!http) return -1;
     char resource[256],printer_uri[320];
     snprintf(resource,sizeof(resource),"/printers/%s",name);
