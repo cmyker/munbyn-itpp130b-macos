@@ -6,10 +6,10 @@ Updated 2026-11-17. **Experimental alpha.** Physical output is tester-confirmed 
 
 | Item | Observed configuration |
 | --- | --- |
-| macOS / architecture | Earlier hardware runs: 15.7.9 (24G830), Apple Silicon arm64; diagnostic software checks: 15.8.1 (24H32), arm64 |
+| macOS / architecture | Earlier hardware runs: 15.7.9 (24G830), Apple Silicon arm64; diagnostic calibration and recovery checks: 15.8.1 (24H32), arm64 |
 | Toolchain | Apple Swift 6.2.4, SDK 26.2 |
 | Printing system | Apple's shipped CUPS 2.3.4 |
-| Deployment target | macOS 13; physical coverage currently 15.7.9; diagnostic build startup also checked on 15.8.1 |
+| Deployment target | macOS 13; earlier physical matrix on 15.7.9; diagnostic single calibration and recovery runtime checked on 15.8.1 |
 | Printer / stock | One explicitly selected ITPP130B, 100 × 150 mm stock |
 | Firmware | Unknown; no undocumented firmware/status probe used |
 | BLE | Service FFF0, writable FFF2, properties 12; observed write capacities 182 bytes without response / 512 with response |
@@ -100,4 +100,6 @@ A successful build, native queue completion, GATT response or rendered preview i
 
 ## Guided recovery validation
 
-The recovery implementation adds durable pause/restart/failure tests against real temporary spools, explicit physical-reset acknowledgement and overlapping-operation guards, structured current-user/local-queue IPP selection and queue-scoped cancellation with explicit job IDs, interrupted deletion cleanup, gated acceptance during durable unpause failure, real loopback abort/rebind, and injected UI flow/window tests. Failed delete/clear actions open recovery without starting it. All 95 tests pass; installed recovery acceptance is pending. No real CUPS queue is mutated by those automated tests.
+The recovery implementation adds durable pause/restart/failure tests against real temporary spools, explicit physical-reset acknowledgement and overlapping-operation guards, structured current-user/local-queue IPP selection and queue-scoped cancellation with explicit job IDs, interrupted deletion cleanup, gated acceptance during durable unpause failure, real loopback abort/rebind, and injected UI flow/window tests. Failed delete/clear actions open recovery without starting it. All 95 tests pass. No real CUPS queue is mutated by those automated tests.
+
+Installed alpha.5 recovery retained its pause across quit/relaunch, automatically showed the guide, closed the print listener while paused, cancelled one explicitly held synthetic native job, cleared bridge records and restored the listener with a fresh, unconnected BLE client. Printer profile, capture mode, login state, queue configuration and default printer fingerprints were unchanged. The native cancellation ran under the test account; standard-account policy denial was not exercised on a separate account. Failed-action automatic presentation and physical-reset acknowledgement use injected UI tests; the error layout was visually checked in an isolated production-source preview. A fresh post-recovery physical label is pending.

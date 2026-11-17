@@ -6,7 +6,7 @@ This guide applies to the whole repository. It is also useful for human contribu
 
 MUNBYN ITPP130B Bridge is an independent, experimental macOS menu-bar application. It exposes **MUNBYN ITPP130B (Bluetooth)** in the normal print dialog and sends TSPL over BLE to one explicitly selected ITPP130B. Original code is MIT licensed. It is not affiliated with MUNBYN.
 
-The deployment target is macOS 13. Build and runtime evidence currently covers macOS 15.7.9 on Apple Silicon, Swift 6.2.4, SDK 26.2 and Apple's CUPS 2.3.4. The local alpha.5.debug diagnostic build has also passed unit/native conversion/build/startup checks on macOS 15.8.1; its physical acceptance is pending. Other OS versions, Intel/universal packages and other printer models are unverified. Normal users must not need a separately installed runtime.
+The deployment target is macOS 13. Build and runtime evidence currently covers macOS 15.7.9 on Apple Silicon, Swift 6.2.4, SDK 26.2 and Apple's CUPS 2.3.4. On macOS 15.8.1, the diagnostic build printed one tester-confirmed calibration; alpha.5 passed unit/native conversion/build and installed pause/restart/native-job cancellation checks. Its post-recovery physical acceptance is pending. Other OS versions, Intel/universal packages and other printer models are unverified. Normal users must not need a separately installed runtime.
 
 Read these documents first:
 
