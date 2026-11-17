@@ -101,3 +101,28 @@ struct SocketTests {
         #expect((attrs[.posixPermissions] as? NSNumber)?.intValue == 0o600)
     }
 }
+
+extension SocketTests {
+    @Test func recoveryCanRebindAfterAbortingAnActiveConnection() throws {
+        let listener = SocketListener(); defer { listener.stop() }
+        let entered = DispatchSemaphore(value: 0)
+        try listener.startTCP(port: 0) { fd in
+            var byte: UInt8 = 0
+            _ = recv(fd, &byte, 1, 0)
+            entered.signal()
+            _ = recv(fd, &byte, 1, 0)
+        }
+        let port = listener.port
+        let fd = try tcpConnect(port)
+        var byte: UInt8 = 1
+        _ = send(fd, &byte, 1, 0)
+        #expect(entered.wait(timeout: .now() + 2) == .success)
+        listener.stop(); close(fd)
+        for _ in 0..<500 where !listener.isStopped { Thread.sleep(forTimeInterval: 0.01) }
+        #expect(listener.isStopped)
+        try listener.startTCP(port: port) { _ in }
+        #expect(listener.port == port && !listener.isStopped)
+        let conflict = SocketListener(); defer { conflict.stop() }
+        expectThrows(try conflict.startTCP(port: port) { _ in })
+    }
+}

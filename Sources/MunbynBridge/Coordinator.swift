@@ -4,6 +4,7 @@ import ServiceManagement
 import BridgeCore
 @MainActor final class Coordinator {
     let spool: Spool
+    let recovery: PrintingRecovery
     let printer = BLEPrinter()
     let listener = SocketListener()
     let control = SocketListener()
@@ -11,8 +12,11 @@ import BridgeCore
     var dryRun: Bool { didSet { captureMode.set(dryRun) } }
     var pacing = Pacing()
     private var storedStatus = "Starting"
+    private var recoveryMessage: String?
     var status: String {
         get {
+            if let recoveryMessage { return recoveryMessage }
+            if recovery.isPaused { return "Printing paused — choose Recover Printing…" }
             guard let metrics = currentTransmissionMetrics, let phase = metrics.activePhase else { return storedStatus }
             let total = max(1, metrics.totalBytes ?? 1)
             let percent = min(100, Int(Double(metrics.submittedBytes) / Double(total) * 100))
@@ -58,6 +62,7 @@ import BridgeCore
         instanceFD = open(Paths.root.appendingPathComponent("instance.lock").path,O_CREAT | O_RDWR | O_NOFOLLOW,0o600)
         guard instanceFD >= 0,flock(instanceFD,LOCK_EX | LOCK_NB) == 0 else { if instanceFD >= 0 { close(instanceFD) }; throw BridgeError.invalid("Bridge is already running") }
         spool = try Spool(root: Paths.root.appendingPathComponent("spool")); try spool.recover()
+        recovery = try PrintingRecovery(spool: spool, stateURL: Paths.root.appendingPathComponent("recovery-paused.json"))
         let profileURL = Paths.root.appendingPathComponent("printer.json")
         if FileManager.default.fileExists(atPath: profileURL.path) { printer.profile = try JSONDecoder().decode(PrinterProfile.self,from: PrivateFiles.read(profileURL,maxBytes: 8192)) }
         printer.onChange = { [weak self] in self?.onChange?() }
@@ -83,16 +88,7 @@ import BridgeCore
                 try ControlWire.send(box.data,fd: fd)
             } catch { try? ControlWire.send(Self.json(["error":String(describing:error)]),fd: fd) }
         }
-        let spool = self.spool
-        let incoming = listener, mode = captureMode
-        try listener.startTCP(port: 19100) { [weak self] fd in
-            do {
-                let pages = try RasterReader.read(fd: fd)
-                _ = try incoming.withActiveConnection(fd) { try spool.accept(pages: pages,captureOnly:mode.get()) }
-                // Handler returns only after durable validation. TCP close remains unacknowledged to CUPS.
-                Task { @MainActor in self?.status = "Job durably queued"; self?.process() }
-            } catch { Task { @MainActor in self?.status = "Incoming job rejected: \(error)"; self?.onChange?() } }
-        }
+        if !recovery.isPaused { try startPrintListener() }
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(forName:NSWorkspace.willSleepNotification,object:nil,queue:.main) { [weak self] _ in
             Task { @MainActor in self?.suspended = true; self?.task?.cancel(); self?.printer.releaseLink(); self?.status = "Paused for sleep" }
@@ -107,8 +103,45 @@ import BridgeCore
     func jobs() -> [Job] {
         do { return try spool.jobs() } catch { suspended = true; status = "Private spool unreadable; review required"; return [] }
     }
-    var blocked: Bool { jobs().contains { $0.state == .outcomeUnknown && !$0.recoveryConfirmed } }
+    var blocked: Bool { recovery.isPaused || jobs().contains { $0.state == .outcomeUnknown && !$0.recoveryConfirmed } }
+    var needsRecovery: Bool { recovery.isPaused || jobs().contains { ![.transmitted, .captured, .cancelled].contains($0.state) } }
+    private func startPrintListener() throws {
+        let spool = self.spool, incoming = listener, mode = captureMode
+        try listener.startTCP(port: 19100) { [weak self] fd in
+            do {
+                let pages = try RasterReader.read(fd: fd)
+                _ = try incoming.withActiveConnection(fd) { try spool.accept(pages: pages, captureOnly: mode.get()) }
+                Task { @MainActor in self?.status = "Job durably queued"; self?.process() }
+            } catch { Task { @MainActor in self?.status = "Incoming job rejected: \(error)"; self?.onChange?() } }
+        }
+    }
+    private func beginRecovery() async throws -> Data {
+        guard !busy, !printer.scanning else { throw BridgeError.invalid("Wait for the current setup action to finish, then retry Recover Printing") }
+        busy = true; recoveryMessage = "Stopping jobs and releasing the printer…"; onChange?()
+        defer { busy = false; recoveryMessage = nil; onChange?() }
+        try await recovery.begin(stop: {
+            self.listener.stop(); self.task?.cancel(); self.printer.releaseLink()
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while self.task != nil || !self.listener.isStopped {
+                guard ContinuousClock.now < deadline else { throw BridgeError.invalid("Printing is still stopping. Jobs are retained; restart the bridge and reopen Recover Printing") }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+        }, cancelNative: { try await Task.detached { try QueueRecovery.cancelPending() }.value })
+        return Self.json(["paused": true, "needsPrinterRestart": try recovery.needsPrinterRestart()])
+    }
+    private func finishRecovery(printerRestarted: Bool) async throws -> Data {
+        guard !busy, task == nil, listener.isStopped else { throw BridgeError.invalid("Start Recover Printing and wait for printing to stop first") }
+        busy = true; recoveryMessage = "Clearing jobs and resetting the connection…"; onChange?()
+        defer { busy = false; recoveryMessage = nil; onChange?(); process() }
+        try await recovery.finish(printerRestarted: printerRestarted, prepare: {
+            try await Task.detached { try QueueRecovery.cancelPending() }.value
+            try await self.printer.resetConnection()
+        }, resume: { try self.startPrintListener() })
+        suspended = false; status = "Ready — recovery finished; no old job replayed"; process()
+        return Self.json(["paused": false, "needsPrinterRestart": false])
+    }
     func process() {
+        if recovery.isPaused { onChange?(); return }
         if blocked {
             status = "Printing blocked: inspect outcome-unknown job and recover printer"
             onChange?(); return
@@ -190,7 +223,17 @@ import BridgeCore
         }
     }
     func command(_ request: ControlRequest) async throws -> Data {
+        let whilePaused: Set<String> = ["status", "doctor", "recovery-begin", "recovery-finish", "release", "quit", "cancel", "login", "clear-captures"]
+        if recovery.isPaused, !whilePaused.contains(request.command) {
+            throw BridgeError.invalid("Printing is paused for recovery. Choose Recover Printing… to finish safely")
+        }
         switch request.command {
+        case "recovery-begin":
+            guard request.confirm else { throw BridgeError.invalid("Confirm cancellation and clearing of this printer's jobs first") }
+            return try await beginRecovery()
+        case "recovery-finish":
+            guard request.confirm else { throw BridgeError.invalid("Confirm clearing pending jobs before finishing recovery") }
+            return try await finishRecovery(printerRestarted: request.value == "printer-restarted")
         case "status","doctor":
             let inspection = await Task.detached { Result { try QueueInstaller.snapshot() } }.value
             let snapshot = (try? inspection.get()) ?? nil
@@ -198,7 +241,7 @@ import BridgeCore
             if case .failure = inspection { inspectionDescription = "unavailable; ownership unknown" }
             var transmission: Any = NSNull()
             if let metrics = currentTransmissionMetrics,let data = try? JSONEncoder().encode(metrics),let object = try? JSONSerialization.jsonObject(with:data) { transmission = object }
-            return Self.json(["application":"MUNBYN ITPP130B Bridge","version":"0.1.0-alpha.5.debug","mode":dryRun ? "dry-run" : "BLE", "status":status,"bluetooth":printer.stateDescription,"bleStatus":printer.status,"bleTransport":printer.diagnostics,"pacingChunkCap":pacing.chunkCap,"pacingDelaySeconds":pacing.delay,"printerSelected":printer.profile != nil,"uncertainOutcomeBlocksPrinting":blocked,"loopback":"127.0.0.1:19100","queueInspection":inspectionDescription,"queueInstalled":snapshot != nil,"queueOwned":snapshot?.location == QueuePlan.marker && snapshot?.uri == QueuePlan.uri,"login":loginStatus,"lastJobTimingSeconds":lastJobTimings,"lastTransmissionMetrics":transmission,"jobs":jobs().map { ["id":$0.id.uuidString,"state":$0.state.rawValue,"pages":$0.pages] as [String:Any] }])
+            return Self.json(["application":"MUNBYN ITPP130B Bridge","version":"0.1.0-alpha.5.debug","mode":dryRun ? "dry-run" : "BLE", "status":status,"bluetooth":printer.stateDescription,"bleStatus":printer.status,"bleTransport":printer.diagnostics,"pacingChunkCap":pacing.chunkCap,"pacingDelaySeconds":pacing.delay,"printerSelected":printer.profile != nil,"uncertainOutcomeBlocksPrinting":blocked,"recoveryPaused":recovery.isPaused,"loopback":"127.0.0.1:19100","queueInspection":inspectionDescription,"queueInstalled":snapshot != nil,"queueOwned":snapshot?.location == QueuePlan.marker && snapshot?.uri == QueuePlan.uri,"login":loginStatus,"lastJobTimingSeconds":lastJobTimings,"lastTransmissionMetrics":transmission,"jobs":jobs().map { ["id":$0.id.uuidString,"state":$0.state.rawValue,"pages":$0.pages] as [String:Any] }])
         case "scan":
             guard task == nil,!busy else { throw BridgeError.invalid("Printing/setup active") }
             busy = true; defer { busy = false; process() }

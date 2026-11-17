@@ -177,7 +177,17 @@ struct DiscoveredPrinter: Codable {
         if let p = peripheral { disconnecting = p; central?.cancelPeripheralConnection(p) }
         peripheral = nil; characteristic = nil; finalWriteAcknowledged = false; update("Release requested; no idle reconnect")
     }
+    func resetConnection() async throws {
+        // The owner has stopped its sender before reaching this operation.
+        releaseLink()
+        peripheral?.delegate = nil; disconnecting?.delegate = nil
+        central?.delegate = nil; central = nil
+        peripheral = nil; disconnecting = nil; characteristic = nil
+        observedTransport = [:]; readinessCallbacks = 0; responseCallbacks = 0
+        update("Connection reset; next print connects afresh")
+    }
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        guard central === self.central else { return }
         update("Bluetooth \(stateDescription)")
         if currentOperation == "Bluetooth availability" {
             if central.state == .poweredOn { finish(.success(())) }
@@ -185,18 +195,22 @@ struct DiscoveredPrinter: Codable {
         } else if central.state != .poweredOn { finish(.failure(BridgeError.invalid("Bluetooth \(stateDescription)"))) }
     }
     func centralManager(_ central: CBCentralManager,didDiscover p: CBPeripheral,advertisementData: [String:Any],rssi RSSI: NSNumber) {
+        guard central === self.central else { return }
         let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? p.name ?? "Unnamed device"
         devices[p.identifier] = (p,.init(identifier:p.identifier,name:name,rssi:RSSI.intValue))
     }
     func centralManager(_ central: CBCentralManager,didConnect p: CBPeripheral) {
+        guard central === self.central else { return }
         guard p === peripheral else { central.cancelPeripheralConnection(p); return }
         if currentOperation == "Printer connection" { finish(.success(())) }
     }
     func centralManager(_ central: CBCentralManager,didFailToConnect p: CBPeripheral,error: Error?) {
+        guard central === self.central else { return }
         guard p === peripheral else { return }
         finish(.failure(BridgeError.invalid("Printer connection failed; it may be connected elsewhere")))
     }
     func centralManager(_ central: CBCentralManager,didDisconnectPeripheral p: CBPeripheral,error: Error?) {
+        guard central === self.central else { return }
         if p === disconnecting {
             disconnecting = nil
             if currentOperation == "Previous link release" { finish(.success(())) }

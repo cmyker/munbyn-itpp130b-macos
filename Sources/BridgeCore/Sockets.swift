@@ -7,6 +7,9 @@ public final class SocketListener {
     private let lock = NSLock()
     public private(set) var port: UInt16 = 0
     public init() {}
+    public var isStopped: Bool {
+        lock.lock(); defer { lock.unlock() }; return fd < 0 && active < 0
+    }
     /// Acceptance and local shutdown are ordered under one lock. A local EOF is never accepted.
     public func withActiveConnection<T>(_ connection: Int32,_ body: () throws -> T) throws -> T {
         lock.lock(); defer { lock.unlock() }
@@ -16,6 +19,10 @@ public final class SocketListener {
     public func startTCP(port: UInt16,handler: @escaping (Int32) -> Void) throws {
         let socketFD = socket(AF_INET,SOCK_STREAM,0)
         guard socketFD >= 0 else { throw BridgeError.invalid("Cannot create print listener") }
+        var reuse: Int32 = 1
+        guard setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size)) == 0 else {
+            close(socketFD); throw BridgeError.invalid("Cannot configure the loopback listener")
+        }
         var address = sockaddr_in(); address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         address.sin_family = sa_family_t(AF_INET); address.sin_port = port.bigEndian
         address.sin_addr.s_addr = inet_addr("127.0.0.1")

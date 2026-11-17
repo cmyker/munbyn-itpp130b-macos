@@ -16,6 +16,19 @@ public enum QueuePlan {
     public static func uninstall(existing: QueueSnapshot?) throws -> [String] {
         try validate(existing); return existing == nil ? [] : ["-h",server,"-x",id]
     }
+    public static func cancelPending(existing: QueueSnapshot?, user: String) throws -> [String] {
+        try validate(existing); try validateUser(user)
+        return existing == nil ? [] : ["-h", server, "-a", "-u", user, id]
+    }
+    public static func pendingQuery(user: String) throws -> [String] {
+        try validateUser(user)
+        return ["-h", server, "-W", "not-completed", "-u", user, "-o", id]
+    }
+    private static func validateUser(_ user: String) throws {
+        guard !user.isEmpty, user.utf8.count <= 256, !user.contains("\0") else {
+            throw BridgeError.invalid("Cannot determine the current printing user")
+        }
+    }
     private static func validate(_ existing: QueueSnapshot?) throws {
         if let existing, existing.location != marker || existing.uri != uri {
             throw BridgeError.invalid("Queue identifier belongs to another configuration; refusing to modify it")

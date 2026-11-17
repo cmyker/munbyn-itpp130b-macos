@@ -80,6 +80,7 @@ int mb_queue_snapshot(const char *name,char *location,size_t location_size,char 
     if (!name || !*name || strlen(name) > 128 || strspn(name,"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_") != strlen(name)) return -1;
     http_t *http = httpConnect2(mb_cups_host(),631,NULL,AF_UNSPEC,HTTP_ENCRYPTION_IF_REQUESTED,1,5000,NULL);
     if (!http) return -1;
+    httpSetTimeout(http,5.0,NULL,NULL);
     char resource[256],printer_uri[320];
     snprintf(resource,sizeof(resource),"/printers/%s",name);
     snprintf(printer_uri,sizeof(printer_uri),"ipp://localhost:631%s",resource);
