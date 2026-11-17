@@ -14,7 +14,7 @@ One explicitly selected ITPP130B, one logged-in macOS user, native printing of l
 
 No label editor, automatic A4 extraction/cropping, browser extension, LAN sharing, cloud, accounts, telemetry or automatic updates. The print application controls layout and page ranges; use a PDF sized for the loaded stock.
 
-Deployment target is macOS 13. Builds and local integration have been exercised on **macOS 15.7.9, Apple Silicon, Swift 6.2.4, SDK 26.2, Apple CUPS 2.3.4**. macOS 13/14, Intel and universal packages are not validated. Building needs an Apple Swift 6 compiler and macOS SDK (Xcode or Command Line Tools). Normal use needs no Homebrew, Python, Node or separately installed runtime.
+Deployment target is macOS 13. Builds and local integration have been exercised on **macOS 15.7.9, Apple Silicon, Swift 6.2.4, SDK 26.2, Apple CUPS 2.3.4**. The alpha.5 software checks and a complete synthetic calibration also ran on macOS 15.8.1; the full hardware/lifecycle matrix remains pending. macOS 13/14, Intel and universal packages are not validated. Building needs an Apple Swift 6 compiler and macOS SDK (Xcode or Command Line Tools). Normal use needs no Homebrew, Python, Node or separately installed runtime.
 
 ## Download and install
 
@@ -64,6 +64,18 @@ New printer selections prefer **Without Response** for bulk data when both write
 
 The encoder uses full-width bitmap strips, including white pixels. A compact representation passed offline checks but failed physical acceptance and was removed. Full-width transfers also experienced stalls, so bitmap layout alone does not explain the failure. A response to the last data chunk and the empirical settling interval do not confirm paper output or guarantee earlier best-effort delivery. Reliable delivery remains unresolved.
 
+## Recover printing without developer tools
+
+Choose **Recover Printing…** directly from the menu when jobs need attention, or **Settings → Printer → Recover Printing…** at any time. **Clear All Jobs** also opens this flow when pending/failed/uncertain work needs recovery.
+
+1. Read the warning and choose **Stop and Reset Printing**. The bridge pauses safely, stops incoming/transmitting work, releases its BLE link and cancels only your jobs in its own macOS printer queue.
+2. If a transfer may have left partial data, inspect the paper, turn the printer off and on, then check the acknowledgement and choose **Clear Jobs and Finish**. No unverified software printer-reset command is sent.
+3. Wait for **Recovery finished**, then submit your document once. Pending bridge labels have been discarded; no old bridge job is automatically replayed. The next print creates a fresh BLE client/connection to your selected printer.
+
+Closing while waiting for the printer restart keeps printing paused and the remaining bridge records retained. Reopen the flow to continue. Already-confirmed automatic steps may finish in the background; the window explains this. Quit/restart also preserves an unfinished pause and shows the recovery window again. Errors leave a retryable pause rather than silently resuming old work; partial filesystem deletion cannot be rolled back. Print requests submitted during reset may be cancelled, so wait until it finishes.
+
+The USB/default printer, other queues/users' jobs, printer selection, login preference and separate captures are preserved. Recovery resets the bridge's client, not system-wide Bluetooth. It does not diagnose or fix the underlying intermittent BLE stall, or remove the raw-socket handoff limitations. If you need to keep an uncertain job for a deliberate reprint, close the initial warning before starting recovery and use the existing individual Jobs actions with their duplicate warning.
+
 ## Failures and ownership
 
 Jobs are validated and durably stored before the bridge closes the incoming stream. One job/page sequence owns the BLE connection at a time. `transmitted` means CoreBluetooth accepted writes, **not confirmed paper output**. Print Center can therefore show an empty queue while the bridge is still connecting or sending. Check the printer-shaped menu-bar icon → **Jobs** for the bridge-owned state; an empty native queue is not proof that a label printed.
@@ -75,7 +87,7 @@ Jobs are validated and durably stored before the bridge closes the incoming stre
 
 **Architecture limitation:** Apple's socket backend has no transactional application acknowledgement or native job identity. It can report completion after a validation rejection or a crash before durable handoff, and a replay around handoff can duplicate a job. `abort-job` limits scheduler retries but cannot remove these windows. The installed backend continued preconnection retries beyond 45 seconds despite its timeout hint; native cancellation is available before handoff. Check bridge status after failures. The project remains experimental because these limits do not meet fully acknowledged job ownership. [ADR-001](docs/architecture.md) evaluates maintained PAPPL IPP as a replacement, without building two production paths.
 
-**Jobs → Clear All Jobs…** removes all bridge job records and their local job files after a deletion warning. Pending labels are lost. It requires idle printing/setup and refuses the entire operation if any active or unrecovered outcome-unknown record exists; review/cancel work and confirm buffer recovery first. It does not clear Print Center jobs, reset the printer, or delete separate diagnostic captures. A filesystem failure can leave some records already deleted and the remainder visible; ordinary deletion is not a transaction or secure SSD erasure. Opening this menu does not delete anything.
+**Jobs → Clear All Jobs…** opens guided recovery when work needs attention. Otherwise it removes all bridge job records and their local job files after a deletion warning. Pending labels are lost. It requires idle printing/setup and refuses the entire operation if any active or unrecovered outcome-unknown record exists; review/cancel work and confirm buffer recovery first. It does not clear Print Center jobs, reset the printer, or delete separate diagnostic captures. A filesystem failure can leave some records already deleted and the remainder visible; ordinary deletion is not a transaction or secure SSD erasure. Opening this menu does not delete anything.
 
 ## Diagnostics and privacy
 

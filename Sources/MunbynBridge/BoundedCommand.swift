@@ -11,6 +11,7 @@ enum BoundedCommand {
         process.executableURL = URL(fileURLWithPath: executable); process.arguments = arguments
         process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C", "CUPS_SERVER": QueuePlan.server]
         process.standardOutput = pipe; process.standardError = pipe
+        process.standardInput = FileHandle.nullDevice
         process.terminationHandler = { _ in exited.signal() }
         try process.run()
         try? pipe.fileHandleForWriting.close()

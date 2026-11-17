@@ -72,6 +72,9 @@ import BridgeCore
         Task { await perform(request, title: sender.title) }
     }
     private func perform(_ request: ControlRequest, title: String) async {
+        if request.command == "clear-jobs", coordinator.needsRecovery {
+            showRecovery(); return
+        }
         let warnings: [String:String] = [
             "test-print":"This consumes one synthetic calibration label. Load the selected physical stock. The TSPL and BLE path is experimental; inspect the paper before routine printing.",
             "write-mode":request.value == "without-response" ? "Stream bulk data without response; send each page's last existing chunk with response and wait before releasing the link. Both write properties are required. This may reduce delay but requires a complete synthetic test label and QR scan before routine use. GATT responses do not confirm paper output. The setting is saved only for your selected printer." : "Use response writes for the selected printer. This can be slower. Availability is checked on connection.",

@@ -44,7 +44,7 @@ Source revision: $source_revision
 Source: https://github.com/cmyker/munbyn-itpp130b-macos
 Signing: $signing
 Notarization: not performed by this packaging tool
-Deployment target: macOS 13; tested runtime: macOS 15.7.9
+Deployment target: macOS 13; tested runtimes: macOS 15.7.9 (earlier hardware), 15.8.1 (alpha.5 checks); see validation evidence
 Status: experimental alpha; see validation evidence in the source repository
 EOF
 stem="MUNBYN-ITPP130B-Bridge-$release_version-macos-arm64"

@@ -9,7 +9,7 @@ Use **Recover Printing…** in the menu when work needs attention, and always in
 ## Flow and boundaries
 
 1. Opening the action does nothing. A warning explains that pending bridge jobs and this user's jobs in the project CUPS queue will be cancelled/discarded; earlier output may exist.
-2. Starting persists a recovery pause before stopping ingress/transmission, releases the BLE link, and cancels only current-user jobs in the ownership-verified project queue on localhost:631. Wait for in-flight work to stop. Failure leaves a visible, durable recovery pause and retained records.
+2. Starting persists a recovery pause before stopping ingress/transmission, releases the BLE link, and cancels only current-user jobs in the ownership-verified project queue on localhost:631. Wait for in-flight work to stop. Failure leaves a visible, durable recovery pause and any remaining records; deletion can partially complete.
 3. If any interrupted transmission has an unrecovered unknown outcome, clearly ask the operator to inspect the paper and turn the printer off and on. Closing the prompt leaves the pause and records intact; reopening resumes the flow.
 4. Explicit completion acknowledges the physical reset when required, checks native pending work again, recreates the app's BLE client without connecting, deletes bridge job records through existing spool protections, restores loopback ingress, and finally clears the durable pause. No old job is replayed. Starting again is safe after a partial failure or app restart.
 
