@@ -9,27 +9,14 @@ public enum QueuePlan {
     public static let server = "localhost:631"
     public static let uri = "socket://127.0.0.1:19100/?contimeout=5&waiteof=true"
     public static func install(ppd: String,existing: QueueSnapshot?) throws -> [String] {
-        try validate(existing)
+        try validateOwnership(existing)
         guard ppd.hasPrefix("/"), !ppd.contains("\0"), ppd.hasSuffix(".ppd") else { throw BridgeError.invalid("Invalid bundled PPD path") }
         return ["-h",server,"-p",id,"-D",display,"-L",marker,"-v",uri,"-P",ppd,"-E","-o","printer-is-shared=false","-o","printer-error-policy=abort-job","-o","job-sheets-default=none","-o","PageSize=Label100x150"]
     }
     public static func uninstall(existing: QueueSnapshot?) throws -> [String] {
-        try validate(existing); return existing == nil ? [] : ["-h",server,"-x",id]
+        try validateOwnership(existing); return existing == nil ? [] : ["-h",server,"-x",id]
     }
-    public static func cancelPending(existing: QueueSnapshot?, user: String) throws -> [String] {
-        try validate(existing); try validateUser(user)
-        return existing == nil ? [] : ["-h", server, "-a", "-u", user, id]
-    }
-    public static func pendingQuery(user: String) throws -> [String] {
-        try validateUser(user)
-        return ["-h", server, "-W", "not-completed", "-u", user, "-o", id]
-    }
-    private static func validateUser(_ user: String) throws {
-        guard !user.isEmpty, user.utf8.count <= 256, !user.contains("\0") else {
-            throw BridgeError.invalid("Cannot determine the current printing user")
-        }
-    }
-    private static func validate(_ existing: QueueSnapshot?) throws {
+    public static func validateOwnership(_ existing: QueueSnapshot?) throws {
         if let existing, existing.location != marker || existing.uri != uri {
             throw BridgeError.invalid("Queue identifier belongs to another configuration; refusing to modify it")
         }

@@ -6,6 +6,18 @@ func temporarySpool() throws -> Spool {
 }
 let testPage = RasterPage(width: 8,height: 1,black: Data([0x80]))
 struct SpoolTests {
+    @Test func interruptedDeletionIsHiddenAndCleanedOnRestart() throws {
+        let s = try temporarySpool(); defer { try? FileManager.default.removeItem(at: s.root) }
+        let removed = try s.accept(pages: [testPage]); let retained = try s.accept(pages: [testPage])
+        // Independent crash fixture: atomic rename succeeded, recursive deletion
+        // removed the record but was interrupted before removing the payload.
+        let tombstone = s.root.appendingPathComponent(".deleting-" + removed.id.uuidString)
+        try FileManager.default.moveItem(at: s.root.appendingPathComponent(removed.id.uuidString), to: tombstone)
+        try FileManager.default.removeItem(at: tombstone.appendingPathComponent("job.json"))
+        let reopened = try Spool(root: s.root); try reopened.recover()
+        #expect(try reopened.jobs().map(\.id) == [retained.id])
+        #expect(!FileManager.default.fileExists(atPath: tombstone.path))
+    }
     @Test func durableAcceptanceAndPrivatePermissions() throws {
         let spool = try temporarySpool(); defer { try? FileManager.default.removeItem(at: spool.root) }
         let job = try spool.accept(pages: [testPage])

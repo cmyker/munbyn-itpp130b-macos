@@ -4,7 +4,7 @@ import BridgeCore
 
 /// Fixed native tools only; callers provide an argv vector, never a shell command.
 enum BoundedCommand {
-    static func run(executable: String, arguments: [String], timeout: Double = 15) throws -> (Int32, String) {
+    static func run(executable: String, arguments: [String], timeout: Double = 15, ownerLifetime: Bool = false) throws -> (Int32, String) {
         guard timeout.isFinite, timeout > 0, timeout <= 30 else { throw BridgeError.invalid("Invalid native command timeout") }
         let process = Process(), pipe = Pipe(), output = CommandOutput()
         let exited = DispatchSemaphore(value: 0), readDone = DispatchSemaphore(value: 0)
@@ -12,8 +12,17 @@ enum BoundedCommand {
         process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C", "CUPS_SERVER": QueuePlan.server]
         process.standardOutput = pipe; process.standardError = pipe
         process.standardInput = FileHandle.nullDevice
+        let lifetime = Pipe()
+        defer { try? lifetime.fileHandleForWriting.close(); try? lifetime.fileHandleForReading.close() }
+        if ownerLifetime {
+            // Only the app keeps the write end. Its exit closes this channel
+            // even if no Swift cleanup/reaper can run after an unexpected exit.
+            guard fcntl(lifetime.fileHandleForWriting.fileDescriptor, F_SETFD, FD_CLOEXEC) == 0 else { throw BridgeError.invalid("Cannot protect recovery worker lifetime") }
+            process.standardInput = lifetime
+        }
         process.terminationHandler = { _ in exited.signal() }
         try process.run()
+        try? lifetime.fileHandleForReading.close()
         try? pipe.fileHandleForWriting.close()
         let readHandle = pipe.fileHandleForReading
         let fd = readHandle.fileDescriptor
@@ -35,8 +44,10 @@ enum BoundedCommand {
             if process.isRunning { process.terminate() }
             if exited.wait(timeout: .now() + 0.5) != .success, process.isRunning {
                 kill(process.processIdentifier, SIGKILL)
-                _ = exited.wait(timeout: .now() + 0.5)
             }
+            // Reap our own child before allowing any recovery retry. A detached
+            // libcups worker must never survive and cancel jobs after timeout.
+            process.waitUntilExit()
         }
         var fullyRead = readDone.wait(timeout: .now() + 0.5) == .success
         if !fullyRead {

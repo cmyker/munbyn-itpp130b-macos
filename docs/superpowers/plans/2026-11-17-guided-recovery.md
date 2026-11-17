@@ -37,9 +37,9 @@
 
 **Files:** QueuePlan.swift; Sockets.swift; BoundedCommand.swift; QueueRecovery.swift; Coordinator.swift; BLE.swift; QueueTests.swift; SocketTests.swift; native command tests.
 **Consumes:** Task 1 recovery policy and hooks.
-**Produces:** QueuePlan.cancelPending(existing:user:) and pendingQuery(user:) argv; BoundedCommand.run(executable:arguments:timeout:); QueueRecovery.cancelPending() throws; SocketListener.isStopped; BLEPrinter.resetConnection() async throws; Coordinator recovery-begin/recovery-finish commands and persistent process/ingress pause.
+**Produces:** NativeQueueRecovery with fixed local structured IPP queue/user filtering and explicit queue-scoped job-ids; BoundedCommand.run(executable:arguments:timeout:); QueueRecovery.cancelPending() throws; SocketListener.isStopped; BLEPrinter.resetConnection() async throws; Coordinator recovery-begin/recovery-finish commands and persistent process/ingress pause.
 
-- [ ] Write failing argv, process timeout/output and stop/rebind tests. Verify no real queue/BLE use.
+- [ ] Write failing IPP scope, process timeout/reaping/output and stop/rebind tests. Verify no real queue/BLE use.
 - [ ] Run focused tests. Expected: missing behavior.
 - [ ] Implement fixed localhost:631/current-user/project-queue commands; ownership preflight, bounded execution; await sender/listener stop, fresh BLE client without connect, guarded ingress restore.
 - [ ] Run scripts/test.sh. Expected: all tests pass. Commit operations and tests.

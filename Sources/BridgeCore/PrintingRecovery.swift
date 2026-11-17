@@ -5,16 +5,26 @@ import Foundation
     private let spool: Spool
     private let stateURL: URL
     public private(set) var isPaused: Bool
+    public let ingress: PrintIngressGate
     private var operationInProgress = false
 
     public init(spool: Spool, stateURL: URL) throws {
         self.spool = spool; self.stateURL = stateURL
         isPaused = FileManager.default.fileExists(atPath: stateURL.path)
             ? try JSONDecoder().decode(Bool.self, from: PrivateFiles.read(stateURL, maxBytes: 128)) : false
+        ingress = PrintIngressGate(isOpen: !isPaused)
     }
     private func persist(_ paused: Bool) throws {
-        try PrivateFiles.write(JSONEncoder().encode(paused), to: stateURL)
-        isPaused = paused
+        if paused { isPaused = true; ingress.setOpen(false) }
+        do {
+            try PrivateFiles.write(JSONEncoder().encode(paused), to: stateURL)
+            isPaused = paused
+        } catch {
+            // A directory sync can fail after rename. Try to restore the pause,
+            // while retaining the in-process gate even if storage is unusable.
+            if !paused { try? PrivateFiles.write(JSONEncoder().encode(true), to: stateURL) }
+            throw error
+        }
     }
     public func needsPrinterRestart() throws -> Bool {
         try spool.jobs().contains { $0.state == .outcomeUnknown && !$0.recoveryConfirmed }
@@ -23,14 +33,17 @@ import Foundation
         guard !operationInProgress else { throw BridgeError.invalid("Recovery is already running") }
         operationInProgress = true; defer { operationInProgress = false }
         // A crash or closed recovery window must not turn held jobs into new prints.
-        try persist(true)
+        do { try persist(true) }
+        catch { try? await stop(); throw error }
+        ingress.setOpen(false)
         try await stop()
         try await cancelNative()
     }
-    public func finish(printerRestarted: Bool, prepare: () async throws -> Void, resume: () async throws -> Void) async throws {
+    public func finish(printerRestarted: Bool, prepare: () async throws -> Void, resume: () async throws -> Void, stopIngress: () -> Void = {}) async throws {
         guard !operationInProgress else { throw BridgeError.invalid("Recovery is still stopping work") }
         operationInProgress = true; defer { operationInProgress = false }
         guard isPaused else { throw BridgeError.invalid("Start Recover Printing before completing it") }
+        defer { if isPaused { ingress.setOpen(false); stopIngress() } }
         let jobs = try spool.jobs()
         guard !jobs.contains(where: { [.connecting, .sending].contains($0.state) }) else {
             throw BridgeError.invalid("Printing is still stopping. Retry Recover Printing; jobs have been retained")
@@ -51,5 +64,6 @@ import Foundation
         try await resume()
         // Clear the pause last; every earlier error remains safely resumable.
         try persist(false)
+        ingress.setOpen(true)
     }
 }

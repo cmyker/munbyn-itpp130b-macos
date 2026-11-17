@@ -183,6 +183,8 @@ struct DiscoveredPrinter: Codable {
         peripheral?.delegate = nil; disconnecting?.delegate = nil
         central?.delegate = nil; central = nil
         peripheral = nil; disconnecting = nil; characteristic = nil
+        devices.removeAll(); candidates.removeAll(); pendingServices = 0; probing = false
+        writeMode = .withResponse; finalWriteAcknowledged = false
         observedTransport = [:]; readinessCallbacks = 0; responseCallbacks = 0
         update("Connection reset; next print connects afresh")
     }

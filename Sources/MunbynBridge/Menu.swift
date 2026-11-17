@@ -87,7 +87,8 @@ import BridgeCore
             "dry-run":request.value == "on" ? "Raster and TSPL captures may contain addresses or tracking numbers. Captures stay locally in the private diagnostics directory, persist until you delete them, and are never uploaded. Bluetooth will not be accessed for these jobs." : "Future queued jobs will be sent to the selected Bluetooth printer.",
             "quit":"Pending jobs stay on disk. Printing requires this user to be logged in and the bridge running. Active transmission will be cancelled; its outcome may become unknown."]
         if let warning = warnings[request.command], !confirm(title,warning) { return }
-        do { _ = try await coordinator.command(request) } catch { alert("Action stopped",String(describing:error)) }
+        await MenuActionExecutor.run(request, command: { try await self.coordinator.command($0) },
+            recover: { self.presentRecovery(reason: $0) }, report: { self.alert("Action stopped", $0) })
     }
     private func selectPrinter() async {
         do {
@@ -108,12 +109,16 @@ import BridgeCore
         do { let data = try await coordinator.command(.init(command:"doctor")); alert("Diagnostics (no document payloads)",String(decoding:data,as:UTF8.self)) } catch { alert("Diagnostics unavailable",String(describing:error)) }
     }
     @objc func showRecovery() {
+        presentRecovery()
+    }
+    private func presentRecovery(reason: String? = nil) {
         if recoveryWindow == nil || recoveryWindow?.model.stage == .complete {
             recoveryWindow = RecoveryWindowController(RecoveryModel(command: { [weak self] request in
                 guard let self else { throw BridgeError.invalid("Bridge is unavailable") }
                 return try await self.coordinator.command(request)
             }))
         }
+        if let reason { recoveryWindow?.model.explainFailure(reason) }
         recoveryWindow?.present()
     }
     @objc private func showSettings() {

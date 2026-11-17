@@ -27,7 +27,11 @@ Capture never accesses Bluetooth; output is sensitive and private.
 """
 do {
     guard let command = args.first else { print(help); exit(0) }
-    if command == "raster-info" || command == "capture" {
+    if args == ["--internal-recovery-native"] {
+        // Fixed operation for the app's bounded child. No BLE, owner process,
+        // caller-supplied queue, identity, path or privileged command.
+        try NativeQueueRecovery.cancelPending()
+    } else if command == "raster-info" || command == "capture" {
         guard args.count >= 2 else { throw BridgeError.invalid("Raster path required") }
         let fd = open(args[1],O_RDONLY); guard fd >= 0 else { throw BridgeError.invalid("Cannot open raster") }; defer { close(fd) }
         let pages = try RasterReader.read(fd:fd)

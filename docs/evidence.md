@@ -21,7 +21,7 @@ Exact inspected upstream commits, licenses and relevant source files are recorde
 
 ## Hardware-independent checks
 
-The current implementation passed **85 tests across twelve suites** through `scripts/test.sh`, without a printer, Bluetooth permission or queue changes. Coverage includes:
+The current implementation passed **95 tests across thirteen suites** through `scripts/test.sh`, without a printer, Bluetooth permission or queue changes. Coverage includes:
 
 - Literal independent TSPL expectations: dimensions, polarity, row padding, binary framing, media and final-chunk byte ordering.
 - Native raster fixtures: supported monochrome formats, malformed/truncated headers and rows, metadata consistency, limits, page order and copies.
@@ -100,4 +100,4 @@ A successful build, native queue completion, GATT response or rendered preview i
 
 ## Guided recovery validation
 
-The recovery implementation adds durable pause/restart/failure tests against real temporary spools, explicit physical-reset acknowledgement and overlapping-operation guards, fixed current-user/local-queue cancellation argv, bounded native command execution, real loopback abort/rebind, and injected UI flow/window tests. At this checkpoint 85 tests pass; installed recovery acceptance is still pending. No real CUPS queue is mutated by those automated tests.
+The recovery implementation adds durable pause/restart/failure tests against real temporary spools, explicit physical-reset acknowledgement and overlapping-operation guards, structured current-user/local-queue IPP selection and queue-scoped cancellation with explicit job IDs, interrupted deletion cleanup, gated acceptance during durable unpause failure, real loopback abort/rebind, and injected UI flow/window tests. Failed delete/clear actions open recovery without starting it. All 95 tests pass; installed recovery acceptance is pending. No real CUPS queue is mutated by those automated tests.

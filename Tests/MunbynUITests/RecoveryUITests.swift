@@ -15,6 +15,24 @@ import Testing
         #expect(calls == 0)
         #expect(!model.isPerforming)
     }
+    @Test func failedJobDeletionAndClearPresentRecoveryWithoutStartingIt() async {
+        for action in ["delete", "clear-jobs"] {
+            var resetCalls = 0, genericErrors = 0
+            let model = RecoveryModel(command: { _ in resetCalls += 1; return self.finished })
+            await MenuActionExecutor.run(.init(command: action, confirm: true), command: { _ in
+                throw BridgeError.invalid("The printer buffer must be recovered first")
+            }, recover: { reason in model.explainFailure(reason) }, report: { _ in genericErrors += 1 })
+            #expect(model.triggerError.contains("printer buffer"))
+            #expect(model.stage == .warning && resetCalls == 0 && genericErrors == 0)
+        }
+    }
+    @Test func otherActionErrorsStillUseTheirNormalMessage() async {
+        var recoveryCalls = 0, errors = 0
+        await MenuActionExecutor.run(.init(command: "test-print"), command: { _ in
+            throw BridgeError.invalid("Select a printer")
+        }, recover: { _ in recoveryCalls += 1 }, report: { _ in errors += 1 })
+        #expect(recoveryCalls == 0 && errors == 1)
+    }
     @Test func safeIdleResetCompletesOnlyAfterExplicitStart() async {
         var commands: [ControlRequest] = []
         let model = RecoveryModel(command: { request in

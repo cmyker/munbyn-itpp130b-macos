@@ -10,8 +10,12 @@ private struct RecoveryReply: Decodable { var paused: Bool; var needsPrinterRest
     private(set) var isPerforming = false
     private(set) var printerRestarted = false
     private(set) var errorText = ""
+    private(set) var triggerError = ""
     var onChange: (() -> Void)?
     init(command: @escaping (ControlRequest) async throws -> Data) { self.command = command }
+    func explainFailure(_ reason: String) {
+        triggerError = String(reason.prefix(384)); onChange?()
+    }
     func setPrinterRestarted(_ value: Bool) {
         guard stage == .printerRestart, !isPerforming else { return }
         printerRestarted = value; onChange?()

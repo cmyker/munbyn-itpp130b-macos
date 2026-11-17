@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Testing
 @testable import BridgeCore
 
@@ -30,6 +31,57 @@ import Testing
         let reopened = try PrintingRecovery(spool: spool, stateURL: root.appendingPathComponent("paused.json"))
         #expect(reopened.isPaused)
         #expect(try spool.pages(for: job.id) == [testPage])
+    }
+    @Test func storageFailureStillStopsThisProcessAndRetainsItsJobs() async throws {
+        let (root, spool, recovery) = try fixture()
+        defer { chmod(root.path, 0o700); try? FileManager.default.removeItem(at: root) }
+        _ = try spool.accept(pages: [testPage]); var stopped = false
+        #expect(chmod(root.path, 0o500) == 0)
+        do {
+            try await recovery.begin(stop: { stopped = true }, cancelNative: { Issue.record("Do not mutate CUPS without a saved pause") })
+            Issue.record("Expected pause persistence failure")
+        } catch {}
+        #expect(stopped && recovery.isPaused && !recovery.ingress.isOpen)
+        #expect(try spool.jobs().count == 1)
+    }
+    @Test func listenerCannotAcceptBeforeDurableUnpauseAndStopsIfThatWriteFails() async throws {
+        let (root, spool, recovery) = try fixture()
+        defer { chmod(root.path, 0o700); try? FileManager.default.removeItem(at: root) }
+        try await recovery.begin(stop: {}, cancelNative: {})
+        let listener = SocketListener(); defer { listener.stop() }
+        let gate = recovery.ingress
+        let rejected = DispatchSemaphore(value: 0)
+        let accepted = ResultBox<Bool>()
+        do {
+            try await recovery.finish(printerRestarted: false, prepare: {}, resume: {
+                try listener.startTCP(port: 0) { fd in
+                    do {
+                        try listener.withActiveConnection(fd) {
+                            try gate.withAcceptance { _ = try spool.accept(pages: [testPage]) }
+                        }
+                        accepted.set(true)
+                    } catch { accepted.set(false) }
+                    rejected.signal()
+                }
+                let client = try tcpConnect(listener.port); defer { close(client) }
+                #expect(rejected.wait(timeout: .now() + 2) == .success)
+                // Fail the real final file creation after binding succeeds.
+                #expect(chmod(root.path, 0o500) == 0)
+            }, stopIngress: { listener.stop() })
+            Issue.record("Expected durable unpause failure")
+        } catch {}
+        #expect(accepted.get() == false)
+        #expect(recovery.isPaused && !recovery.ingress.isOpen)
+        #expect(try spool.jobs().isEmpty)
+        for _ in 0..<500 where !listener.isStopped { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(listener.isStopped)
+        #expect(chmod(root.path, 0o700) == 0)
+        let reopened = try PrintingRecovery(spool: spool, stateURL: root.appendingPathComponent("paused.json"))
+        #expect(reopened.isPaused && !reopened.ingress.isOpen)
+        try await recovery.finish(printerRestarted: false, prepare: {}, resume: {})
+        #expect(recovery.ingress.isOpen)
+        _ = try recovery.ingress.withAcceptance { try spool.accept(pages: [testPage]) }
+        #expect(try spool.jobs().count == 1)
     }
     @Test func unknownOutcomeRequiresExplicitPrinterRestartBeforeClearing() async throws {
         let (root, spool, recovery) = try fixture(); defer { try? FileManager.default.removeItem(at: root) }

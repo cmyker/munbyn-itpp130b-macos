@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 public enum JobState: String,Codable,CaseIterable { case queued,connecting,sending,transmitted,captured,failedBeforeSend,outcomeUnknown,cancelled }
 public struct Job: Codable,Identifiable {
     public var id: UUID; public var state: JobState; public var created: Date
@@ -67,7 +68,9 @@ public final class Spool {
             if job.state == .sending { try transition(job.id,to: .outcomeUnknown,error: "App exited after sending intent; do not replay automatically") }
             if job.state == .connecting { try transition(job.id,to: .failedBeforeSend,error: "App exited before any printer write") }
         }
-        try cleanup()
+        // Retention/deletion failure must not prevent opening guided recovery.
+        // New acceptance and explicit clearing still require strict cleanup.
+        try? cleanup()
     }
     public func confirmRecovery(_ id: UUID) throws {
         lock.lock(); defer { lock.unlock() }
@@ -83,7 +86,7 @@ public final class Spool {
         lock.lock(); defer { lock.unlock() }
         guard confirmed,let job = try jobs().first(where: { $0.id == id }),![.connecting,.sending].contains(job.state),
               job.state != .outcomeUnknown || job.recoveryConfirmed else { throw BridgeError.invalid("Deletion requires confirmation; active/uncertain printer state must be resolved first") }
-        try FileManager.default.removeItem(at: folder(id)); try PrivateFiles.syncDirectory(root)
+        try removeRecord(id)
     }
     public func clearAll(confirmed: Bool) throws {
         lock.lock(); defer { lock.unlock() }
@@ -95,10 +98,15 @@ public final class Spool {
             ($0.state != .outcomeUnknown || $0.recoveryConfirmed) }) else {
             throw BridgeError.invalid("Cancel active work and confirm uncertain printer-buffer recovery before clearing all jobs")
         }
+        try cleanupTombstones()
         for job in all { try delete(job.id, confirmed: true) }
     }
     public func cleanup() throws {
         lock.lock(); defer { lock.unlock() }
+        try cleanupTombstones()
+        try cleanupFinished()
+    }
+    private func cleanupFinished() throws {
         let finished = try jobs().filter { [.transmitted,.captured,.cancelled].contains($0.state) }
         for var job in finished {
             let payload = folder(job.id).appendingPathComponent("pages.json")
@@ -108,7 +116,27 @@ public final class Spool {
             if job.bytes != 0 { job.bytes = 0; try save(job) }
         }
         for (index,job) in finished.enumerated() where job.created < Date().addingTimeInterval(-14 * 86400) || index < finished.count - 64 {
-            try FileManager.default.removeItem(at: folder(job.id))
+            try removeRecord(job.id)
+        }
+    }
+    private func removeRecord(_ id: UUID) throws {
+        let hidden = root.appendingPathComponent(".deleting-" + id.uuidString)
+        // Same-volume rename commits removal from the visible spool before
+        // recursive deletion can remove job.json. Restart can always enumerate it.
+        guard rename(folder(id).path, hidden.path) == 0 else { throw BridgeError.invalid("Cannot commit job removal") }
+        try PrivateFiles.syncDirectory(root)
+        try FileManager.default.removeItem(at: hidden)
+        try PrivateFiles.syncDirectory(root)
+    }
+    private func cleanupTombstones() throws {
+        for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            where url.lastPathComponent.hasPrefix(".deleting-") {
+            guard UUID(uuidString: String(url.lastPathComponent.dropFirst(10))) != nil else {
+                throw BridgeError.invalid("Unexpected deletion record in spool")
+            }
+            try PrivateFiles.directory(url)
+            try FileManager.default.removeItem(at: url)
+            try PrivateFiles.syncDirectory(root)
         }
     }
 }

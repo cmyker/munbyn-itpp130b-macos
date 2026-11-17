@@ -106,11 +106,14 @@ import BridgeCore
     var blocked: Bool { recovery.isPaused || jobs().contains { $0.state == .outcomeUnknown && !$0.recoveryConfirmed } }
     var needsRecovery: Bool { recovery.isPaused || jobs().contains { ![.transmitted, .captured, .cancelled].contains($0.state) } }
     private func startPrintListener() throws {
-        let spool = self.spool, incoming = listener, mode = captureMode
+        let spool = self.spool, incoming = listener, mode = captureMode, gate = recovery.ingress
         try listener.startTCP(port: 19100) { [weak self] fd in
             do {
+                guard gate.isOpen else { throw BridgeError.invalid("Printing is paused for recovery") }
                 let pages = try RasterReader.read(fd: fd)
-                _ = try incoming.withActiveConnection(fd) { try spool.accept(pages: pages, captureOnly: mode.get()) }
+                _ = try incoming.withActiveConnection(fd) {
+                    try gate.withAcceptance { try spool.accept(pages: pages, captureOnly: mode.get()) }
+                }
                 Task { @MainActor in self?.status = "Job durably queued"; self?.process() }
             } catch { Task { @MainActor in self?.status = "Incoming job rejected: \(error)"; self?.onChange?() } }
         }
@@ -136,7 +139,7 @@ import BridgeCore
         try await recovery.finish(printerRestarted: printerRestarted, prepare: {
             try await Task.detached { try QueueRecovery.cancelPending() }.value
             try await self.printer.resetConnection()
-        }, resume: { try self.startPrintListener() })
+        }, resume: { try self.startPrintListener() }, stopIngress: { self.listener.stop() })
         suspended = false; status = "Ready — recovery finished; no old job replayed"; process()
         return Self.json(["paused": false, "needsPrinterRestart": false])
     }
@@ -323,6 +326,7 @@ import BridgeCore
                 }
             } else { throw BridgeError.invalid("login requires on/off") }
         case "quit":
+            guard !recovery.isPaused || !busy else { throw BridgeError.invalid("Recovery is stopping native jobs. Wait for this bounded step to finish before quitting") }
             guard request.confirm || jobs().allSatisfy({ [.transmitted,.captured,.cancelled].contains($0.state) }) else { throw BridgeError.invalid("Pending jobs retained; explicit quit confirmation needed") }
             suspended = true
             let activeTask = task; activeTask?.cancel(); printer.releaseLink()

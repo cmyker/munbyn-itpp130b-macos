@@ -4,8 +4,10 @@ import AppKit
     let model: RecoveryModel
     private let heading = NSTextField(labelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
+    private let trigger = NSTextField(wrappingLabelWithString: "")
     private let acknowledgement = NSButton(checkboxWithTitle: "I inspected the paper and turned the printer off and on", target: nil, action: nil)
     private let primary = NSButton(title: "", target: nil, action: nil)
+    private let printCenter = NSButton(title: "Open Print Center", target: nil, action: nil)
     private let spinner = NSProgressIndicator()
     private let footer = NSTextField(wrappingLabelWithString: "")
     init(_ model: RecoveryModel) {
@@ -14,19 +16,21 @@ import AppKit
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     override func loadWindow() {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 360),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 440),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "Recover Printing"; window.isReleasedWhenClosed = false; self.window = window
         guard let content = window.contentView else { return }
         heading.font = .systemFont(ofSize: 20, weight: .semibold)
         detail.font = .systemFont(ofSize: 13)
+        trigger.font = .systemFont(ofSize: 12); trigger.textColor = .systemRed
         acknowledgement.target = self; acknowledgement.action = #selector(toggleAcknowledgement)
         primary.target = self; primary.action = #selector(advance); primary.bezelStyle = .rounded
+        printCenter.target = self; printCenter.action = #selector(openPrintCenter); printCenter.bezelStyle = .rounded
         let close = NSButton(title: "Close", target: self, action: #selector(closeRecovery)); close.bezelStyle = .rounded; close.keyEquivalent = "\u{1b}"
         spinner.style = .spinning; spinner.controlSize = .small; spinner.isDisplayedWhenStopped = false
-        let buttons = NSStackView(views: [spinner, close, primary]); buttons.orientation = .horizontal; buttons.spacing = 12
+        let buttons = NSStackView(views: [spinner, printCenter, close, primary]); buttons.orientation = .horizontal; buttons.spacing = 12
         footer.font = .systemFont(ofSize: 11); footer.textColor = .secondaryLabelColor
-        let stack = NSStackView(views: [heading, detail, acknowledgement, footer, buttons])
+        let stack = NSStackView(views: [heading, trigger, detail, acknowledgement, footer, buttons])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 18
         stack.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -34,7 +38,8 @@ import AppKit
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 24),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -20),
-            detail.widthAnchor.constraint(equalTo: stack.widthAnchor), footer.widthAnchor.constraint(equalTo: stack.widthAnchor)
+            detail.widthAnchor.constraint(equalTo: stack.widthAnchor), footer.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            trigger.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
         window.center(); refresh()
     }
@@ -44,6 +49,9 @@ import AppKit
     }
     private func refresh() {
         guard window != nil else { return }
+        trigger.isHidden = model.triggerError.isEmpty || model.stage == .complete
+        trigger.stringValue = "The job action could not finish: \(model.triggerError)"
+        printCenter.isHidden = model.stage != .failed
         acknowledgement.isHidden = model.stage != .printerRestart
         acknowledgement.state = model.printerRestarted ? .on : .off
         acknowledgement.isEnabled = !model.isPerforming
@@ -88,4 +96,9 @@ import AppKit
         Task { await model.advance() }
     }
     @objc private func closeRecovery() { close() }
+    @objc private func openPrintCenter() {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.printcenter") {
+            NSWorkspace.shared.open(url)
+        }
+    }
 }

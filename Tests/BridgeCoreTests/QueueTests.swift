@@ -39,15 +39,10 @@ extension QueueTests {
 }
 
 extension QueueTests {
-    @Test func recoveryCancellationIsPinnedToTheOwnedQueueAndCurrentUser() throws {
+    @Test func recoveryRequiresExactQueueOwnership() throws {
         let owned = QueueSnapshot(location: QueuePlan.marker, uri: QueuePlan.uri)
-        #expect(try QueuePlan.cancelPending(existing: owned, user: "tester") ==
-            ["-h", "localhost:631", "-a", "-u", "tester", "MUNBYN_ITPP130B_Bluetooth"])
-        #expect(try QueuePlan.pendingQuery(user: "tester") ==
-            ["-h", "localhost:631", "-W", "not-completed", "-u", "tester", "-o", "MUNBYN_ITPP130B_Bluetooth"])
-        #expect(try QueuePlan.cancelPending(existing: nil, user: "tester").isEmpty)
-        expectThrows(try QueuePlan.cancelPending(existing: QueueSnapshot(location: "unrelated", uri: QueuePlan.uri), user: "tester"))
-        expectThrows(try QueuePlan.cancelPending(existing: owned, user: ""))
-        expectThrows(try QueuePlan.pendingQuery(user: "bad\0user"))
+        try QueuePlan.validateOwnership(owned)
+        try QueuePlan.validateOwnership(nil)
+        expectThrows(try QueuePlan.validateOwnership(QueueSnapshot(location: "unrelated", uri: QueuePlan.uri)))
     }
 }
