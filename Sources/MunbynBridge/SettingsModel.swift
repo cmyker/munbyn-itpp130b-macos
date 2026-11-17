@@ -39,11 +39,19 @@ struct SettingsSnapshot {
     var bluetooth = "Not initialized"
     var dryRun = false
     var writePreference: BLEWritePreference? = nil
+    var recoveryPaused = false
 }
 
 enum SettingsAction {
     case command(ControlRequest, String)
-    case selectPrinter, diagnostics, openData, openLoginSettings, openSource
+    case selectPrinter, diagnostics, openData, openLoginSettings, openSource, recoverPrinting
+    var availableDuringRecovery: Bool {
+        switch self {
+        case .recoverPrinting, .diagnostics, .openData, .openLoginSettings, .openSource: return true
+        case .command(let request, _): return ["login", "clear-captures"].contains(request.command)
+        case .selectPrinter: return false
+        }
+    }
 }
 
 @MainActor final class SettingsModel {

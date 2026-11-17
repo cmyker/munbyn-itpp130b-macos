@@ -7,6 +7,7 @@ import BridgeCore
         do {
             let c = try Coordinator(dryRun:CommandLine.arguments.contains("--dry-run")); coordinator = c
             menu = MenuController(c); try c.start()
+            if c.blocked { menu?.showRecovery() }
         } catch {
             if String(describing:error) == "Bridge is already running" { NSApp.terminate(nil); return }
             let a = NSAlert(); a.messageText = "Bridge could not start"; a.informativeText = String(describing:error); a.runModal()

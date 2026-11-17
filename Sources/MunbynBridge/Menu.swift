@@ -10,6 +10,7 @@ import BridgeCore
     let coordinator: Coordinator
     private let item = NSStatusBar.system.statusItem(withLength:NSStatusItem.squareLength)
     private var settingsWindow: SettingsWindowController?
+    private var recoveryWindow: RecoveryWindowController?
     init(_ coordinator: Coordinator) {
         self.coordinator = coordinator; super.init()
         item.button?.image = NSImage(systemSymbolName:"printer",accessibilityDescription:"MUNBYN ITPP130B Bridge")
@@ -25,6 +26,7 @@ import BridgeCore
         add(menu,coordinator.status,enabled:false)
         add(menu,coordinator.printer.status,enabled:false)
         menu.addItem(.separator())
+        if coordinator.needsRecovery { add(menu, "Recover Printing…", selector: #selector(showRecovery)) }
         let allJobs = coordinator.jobs()
         let visible = Self.visibleJobs(allJobs)
         let jobs = NSMenuItem(title:"Jobs (\(visible.count))",action:nil,keyEquivalent:""); let jobMenu = NSMenu()
@@ -102,6 +104,15 @@ import BridgeCore
     private func diagnostics() async {
         do { let data = try await coordinator.command(.init(command:"doctor")); alert("Diagnostics (no document payloads)",String(decoding:data,as:UTF8.self)) } catch { alert("Diagnostics unavailable",String(describing:error)) }
     }
+    @objc func showRecovery() {
+        if recoveryWindow == nil || recoveryWindow?.model.stage == .complete {
+            recoveryWindow = RecoveryWindowController(RecoveryModel(command: { [weak self] request in
+                guard let self else { throw BridgeError.invalid("Bridge is unavailable") }
+                return try await self.coordinator.command(request)
+            }))
+        }
+        recoveryWindow?.present()
+    }
     @objc private func showSettings() {
         if settingsWindow == nil {
             let model = SettingsModel(snapshot: { [weak self] in
@@ -109,13 +120,15 @@ import BridgeCore
                 return SettingsSnapshot(login: LoginState(SMAppService.mainApp.status),
                     printerSelected: self.coordinator.printer.profile != nil, status: self.coordinator.status,
                     bluetooth: self.coordinator.printer.status, dryRun: self.coordinator.dryRun,
-                    writePreference: self.coordinator.printer.profile?.writePreference)
+                    writePreference: self.coordinator.printer.profile?.writePreference,
+                    recoveryPaused: self.coordinator.recovery.isPaused)
             }, perform: { [weak self] action in
                 guard let self else { return }
                 switch action {
                 case let .command(request, title): await self.perform(request, title: title)
                 case .selectPrinter: await self.selectPrinter()
                 case .diagnostics: await self.diagnostics()
+                case .recoverPrinting: self.showRecovery()
                 case .openData: NSWorkspace.shared.open(Paths.root)
                 case .openLoginSettings: SMAppService.openSystemSettingsLoginItems()
                 case .openSource:

@@ -75,11 +75,14 @@ import BridgeCore
         printerStatus.stringValue = state.printerSelected ? "An ITPP130B is selected. \(state.bluetooth)" : "No printer selected. Choose your physical ITPP130B below."
         jobStatus.stringValue = state.status
         dryRun.state = state.dryRun ? .on : .off
-        dryRun.isEnabled = !model.isPerforming
+        dryRun.isEnabled = !model.isPerforming && !state.recoveryPaused
         writeMode.selectItem(at: state.writePreference == nil ? 0 : state.writePreference == .withoutResponse ? 1 : 2)
-        writeMode.isEnabled = !model.isPerforming && state.printerSelected
-        media.isEnabled = !model.isPerforming
-        for button in actionButtons { button.isEnabled = !model.isPerforming }
+        writeMode.isEnabled = !model.isPerforming && state.printerSelected && !state.recoveryPaused
+        media.isEnabled = !model.isPerforming && !state.recoveryPaused
+        for button in actionButtons {
+            let allowed = button.identifier.flatMap { actions[$0]?.availableDuringRecovery } ?? false
+            button.isEnabled = !model.isPerforming && (!state.recoveryPaused || allowed)
+        }
         if model.isPerforming { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
     }
 
@@ -102,6 +105,9 @@ import BridgeCore
                 note("The bridge connects for each job and releases the link afterward. Only the ITPP130B is supported."),
                 row([button("Select Printer…", .selectPrinter),
                      button("Check Connection", .command(.init(command: "connect"), "Check Connection"))]),
+                divider(), heading("Troubleshooting", size: 14),
+                note("Stop stuck jobs, release the printer and start with a fresh connection."),
+                button("Recover Printing…", .recoverPrinting),
                 divider(), heading("Test label", size: 14),
                 note("Choose matching stock. A physical test consumes one label; inspect its output."),
                 row([media, button("Print Test Label…", selector: #selector(testPrint))]),

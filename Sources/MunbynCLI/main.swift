@@ -14,6 +14,9 @@ Commands contact the running app; this CLI never owns a BLE connection.
   reprint JOB-UUID --confirm     Duplicate risk; requires buffer recovery
   delete JOB-UUID --confirm
   clear-jobs --confirm          Deletes bridge records/pending labels; requires idle and resolved recovery
+  recovery-begin --confirm      Stop printing and pause safely for guided recovery
+  recovery-finish [printer-restarted] --confirm
+                               Clear jobs/reset the client; acknowledge a physical restart when required
   dry-run on|off --confirm       Sensitive local captures
   clear-captures --confirm       Ordinary deletion of sensitive captures
   pacing CHUNK,DELAY_SECONDS     Bounded per-run pacing, no automatic tuning
