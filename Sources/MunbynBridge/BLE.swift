@@ -24,6 +24,19 @@ struct DiscoveredPrinter: Codable {
     private var writeMode: CBCharacteristicWriteType = .withResponse
     private var finalWriteAcknowledged = false
     private(set) var observedTransport: [String:String] = [:]
+    private var readinessCallbacks = 0
+    private var responseCallbacks = 0
+    var diagnostics: [String:String] {
+        var result = observedTransport
+        result["operation"] = currentOperation.isEmpty ? "idle" : currentOperation
+        result["readinessCallbacks"] = String(readinessCallbacks)
+        result["responseCallbacks"] = String(responseCallbacks)
+        if let p = peripheral {
+            result["peripheralState"] = String(p.state.rawValue)
+            result["canSendWithoutResponse"] = String(p.canSendWriteWithoutResponse)
+        }
+        return result
+    }
     var profile: PrinterProfile?
     var onChange: (() -> Void)?
     private(set) var status = "Bluetooth not initialized"
@@ -104,6 +117,7 @@ struct DiscoveredPrinter: Codable {
     }
     private func connect(_ p: CBPeripheral) async throws {
         peripheral = p; p.delegate = self; characteristic = nil; finalWriteAcknowledged = false
+        readinessCallbacks = 0; responseCallbacks = 0
         update("Connecting to selected printer")
         do {
             try await wait(operation: "Printer connection") { central.connect(p,options: nil) }
@@ -226,9 +240,12 @@ struct DiscoveredPrinter: Codable {
     }
     func peripheral(_ p: CBPeripheral,didWriteValueFor c: CBCharacteristic,error: Error?) {
         guard p === peripheral,c === characteristic,currentOperation == "Bluetooth write response" else { return }
+        responseCallbacks += 1
         if error != nil { finish(.failure(BridgeError.invalid("Bluetooth write failed"))) } else { finish(.success(())) }
     }
     func peripheralIsReady(toSendWriteWithoutResponse p: CBPeripheral) {
+        guard p === peripheral else { return }
+        readinessCallbacks += 1
         if p === peripheral,currentOperation == "Bluetooth write readiness" { finish(.success(())) }
     }
     func peripheral(_ p: CBPeripheral,didModifyServices invalidatedServices: [CBService]) {

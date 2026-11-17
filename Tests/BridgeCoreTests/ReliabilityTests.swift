@@ -55,9 +55,15 @@ struct SpoolTests {
     var prepareDelay: UInt64 = 0; var finishDelay: UInt64 = 0; var writeDelay: UInt64 = 0
     var finalWrites: [Data] = []; var failFinal = false
     var finalDelay: UInt64 = 0; var awaitingFinalAck = false
+    var awaitingReadiness = false
+    var readinessDelay: UInt64 = 1_000_000_000
     func prepare() async throws { if prepareDelay > 0 { try await Task.sleep(nanoseconds:prepareDelay) } }
     func waitUntilReady() async throws {
-        if stall { try await Task.sleep(nanoseconds: 1_000_000_000) }
+        if stall {
+            awaitingReadiness = true
+            defer { awaitingReadiness = false }
+            try await Task.sleep(nanoseconds: readinessDelay)
+        }
         if notReady { throw BridgeError.invalid("Not ready") }
     }
     func write(_ data: Data) async throws {
@@ -84,6 +90,61 @@ struct SpoolTests {
     }
 }
 struct TransmissionTests {
+    @Test @MainActor func liveReadinessWaitReportsElapsedTimeBeforeReturning() async {
+        let t = TestTransport(); t.stall = true; t.readinessDelay = 3_000_000_000
+        var liveWait = 0.0
+        var completed = false
+        let task = Task {
+            defer { completed = true }
+            try await Transmission.send(data: Data([1]), transport: t,
+                pacing: .init(delay: 0), report: {
+                    if $0.activePhase == .readiness { liveWait = $0.readinessSeconds }
+                }) {}
+        }
+        for _ in 0..<125 where liveWait < 0.5 && !completed {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(t.awaitingReadiness && !t.released)
+        #expect(liveWait >= 0.5)
+        #expect(t.output.isEmpty)
+        task.cancel()
+        _ = try? await task.value
+    }
+    @Test @MainActor func reportsProgressWhileFinalAcknowledgementIsStillPending() async throws {
+        let t = TestTransport(); t.finalDelay = 1_000_000_000
+        var reports: [TransmissionMetrics] = []
+        var completed = false
+        let task = Task {
+            defer { completed = true }
+            try await Transmission.send(data: Data([1,2,3,4,5,6]), transport: t,
+                pacing: .init(delay: 0), report: { reports.append($0) }) {}
+        }
+        while !completed && !t.awaitingFinalAck { await Task.yield() }
+        #expect(t.awaitingFinalAck && !t.released)
+        // Only the first chunk returned successfully; the final call is in flight.
+        #expect(reports.last?.submittedBytes == 3)
+        let snapshot = try #require(reports.last)
+        let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any])
+        #expect(json["activePhase"] as? String == "writing")
+        task.cancel()
+        _ = try? await task.value
+    }
+    @Test @MainActor func reportsStateBeforeAReadinessStallCompletes() async {
+        let t = TestTransport(); t.stall = true
+        var reports: [TransmissionMetrics] = []
+        var completed = false
+        let task = Task {
+            defer { completed = true }
+            try await Transmission.send(data: Data([1]), transport: t,
+                pacing: .init(delay: 0), report: { reports.append($0) }) {}
+        }
+        while !completed && !t.awaitingReadiness { await Task.yield() }
+        #expect(t.awaitingReadiness && !t.released)
+        #expect(!reports.isEmpty)
+        #expect(reports.last?.submittedBytes == 0)
+        task.cancel()
+        _ = try? await task.value
+    }
     @Test @MainActor func eachPageEndsWithItsExistingFinalChunkAcknowledged() async throws {
         let t = TestTransport()
         // Exact multiple and short final chunk, including binary control bytes.
@@ -272,8 +333,9 @@ extension TransmissionTests {
         var reports: [TransmissionMetrics] = []
         try await Transmission.send(data:Data([1,2,3,4]),transport:t,
             pacing:.init(delay:0.01),report:{ reports.append($0) }) {}
-        #expect(reports.count == 1)
-        let m = try #require(reports.first)
+        let finished = reports.filter { $0.activePhase == nil }
+        #expect(finished.count == 1)
+        let m = try #require(finished.first)
         #expect(m.writeCalls == 2); #expect(m.submittedBytes == 4); #expect(m.chunkBytes == 3)
         #expect(m.prepareSeconds >= 0.02); #expect(m.writeSeconds >= 0.02)
         #expect(m.pacingSeconds >= 0.02)
@@ -289,9 +351,10 @@ extension TransmissionTests {
             Issue.record("Expected transmission failure")
         } catch let error as TransmissionFailure { #expect(error.outcomeUnknown) }
         catch { Issue.record("Wrong failure") }
-        #expect(reports.count == 1)
-        #expect(reports.first?.writeCalls == 2)
-        #expect(reports.first?.submittedBytes == 3)
+        let finished = reports.filter { $0.activePhase == nil }
+        #expect(finished.count == 1)
+        #expect(finished.first?.writeCalls == 2)
+        #expect(finished.first?.submittedBytes == 3)
         #expect(t.output == Data([1,2,3])); #expect(t.released)
     }
 }

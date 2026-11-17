@@ -1,15 +1,15 @@
 # Validation evidence and known limitations
 
-Updated 2026-10-07. **Experimental alpha.** Physical output is tester-confirmed on one ITPP130B; complete reliability acceptance remains open. This summary describes anonymous test configurations and reproducible observations. It contains no private documents, device identifiers or personal session transcript.
+Updated 2026-11-17. **Experimental alpha.** Physical output is tester-confirmed on one ITPP130B; complete reliability acceptance remains open. This summary describes anonymous test configurations and reproducible observations. It contains no private documents, device identifiers or personal session transcript.
 
 ## Coverage
 
 | Item | Observed configuration |
 | --- | --- |
-| macOS / architecture | 15.7.9 (24G830), Apple Silicon arm64 |
+| macOS / architecture | Earlier hardware runs: 15.7.9 (24G830), Apple Silicon arm64; diagnostic software checks: 15.8.1 (24H32), arm64 |
 | Toolchain | Apple Swift 6.2.4, SDK 26.2 |
 | Printing system | Apple's shipped CUPS 2.3.4 |
-| Deployment target | macOS 13; runtime coverage currently only 15.7.9 |
+| Deployment target | macOS 13; physical coverage currently 15.7.9; diagnostic build startup also checked on 15.8.1 |
 | Printer / stock | One explicitly selected ITPP130B, 100 × 150 mm stock |
 | Firmware | Unknown; no undocumented firmware/status probe used |
 | BLE | Service FFF0, writable FFF2, properties 12; observed write capacities 182 bytes without response / 512 with response |
@@ -21,7 +21,7 @@ Exact inspected upstream commits, licenses and relevant source files are recorde
 
 ## Hardware-independent checks
 
-The current implementation passed **64 tests across nine suites** through `scripts/test.sh`, without a printer, Bluetooth permission or queue changes. Coverage includes:
+The current implementation passed **67 tests across nine suites** through `scripts/test.sh`, without a printer, Bluetooth permission or queue changes. Coverage includes:
 
 - Literal independent TSPL expectations: dimensions, polarity, row padding, binary framing, media and final-chunk byte ordering.
 - Native raster fixtures: supported monochrome formats, malformed/truncated headers and rows, metadata consistency, limits, page order and copies.
@@ -81,6 +81,12 @@ Later transfers stalled or completed software writes with no paper. One stalled 
 After one Mac Bluetooth off/on diagnostic and printer-buffer recovery, four consecutive software transmissions took **10.058, 10.214, 9.636 and 9.891 seconds**, without further reset between them. Calibration, a scanned synthetic QR and normal label output were tester-confirmed. The two final one-page submissions were distinct native jobs; physical count from both was not separately confirmed. This is a recovery observation, not a diagnosed permanent fix or an acceptable requirement to reset Bluetooth before routine printing.
 
 Bounded opt-in local daemon recordings observed slow write/readiness events and a reported ATT MTU of 185. They did not provide radio capture, physical acknowledgements or a verified controller/firmware cause. Raw traces remain private and are not project dependencies. Scoped process activity was added for active work, but App Nap was not established as the cause or its removal as a speed fix.
+
+## Current diagnostic investigation
+
+A later one-page attempt spent **269.76 of 274.96 seconds** waiting for CoreBluetooth write readiness before operator-directed cancellation. Successful returns counted 68,068 bytes in 374 calls; those counts do not prove printer receipt. The app was responsive. The job was retained as outcome-unknown and was not replayed. Queue clearing and a printer power-cycle did not prevent that recurrence. This localizes the measured wait without establishing the host/controller/firmware cause.
+
+The local `alpha.5.debug` diagnostic build passed 67 tests, native raster conversion, ad-hoc packaging and installed-app startup on macOS 15.8.1 (24H32), Swift 6.2.4 and SDK 26.2. The host reports BCM_4387 controller firmware 22.5.614.3435; no printer firmware was obtained. The build reports phase, submitted/total byte counts and in-flight phase durations once per second. Diagnostics also expose the existing peripheral readiness flag, current operation and callback counts. Underlying errors are retained instead of being replaced solely by a generic interruption message. Regression tests reproduce missing live reports and stalled-wait timing before these changes, then pass with them. Encoding, packet sizes, pacing, write modes, final-chunk policy and conservative recovery are unchanged. This instrumentation is **not a demonstrated BLE stall fix**. No physical result is claimed for this diagnostic build yet; no public release artifact has been published for it.
 
 ## Remaining acceptance and architecture limits
 

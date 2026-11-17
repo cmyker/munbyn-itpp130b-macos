@@ -10,11 +10,39 @@ import BridgeCore
     private let captureMode: PrintMode
     var dryRun: Bool { didSet { captureMode.set(dryRun) } }
     var pacing = Pacing()
-    var status = "Starting"
+    private var storedStatus = "Starting"
+    var status: String {
+        get {
+            guard let metrics = currentTransmissionMetrics, let phase = metrics.activePhase else { return storedStatus }
+            let total = max(1, metrics.totalBytes ?? 1)
+            let percent = min(100, Int(Double(metrics.submittedBytes) / Double(total) * 100))
+            switch phase {
+            case .preparing: return "Connecting to printer"
+            case .readiness: return "Sending \(percent)% — waiting for Bluetooth"
+            case .writing: return "Sending \(percent)% — writing to Bluetooth"
+            case .pacing, .betweenPages: return "Sending \(percent)%"
+            case .recordingIntent: return "Preparing transmission"
+            case .settling: return "Finishing transmission — paper output unconfirmed"
+            }
+        }
+        set { storedStatus = newValue }
+    }
     var onChange: (() -> Void)?
     var devices: [DiscoveredPrinter] = []
     private var lastJobTimings: [String:Double] = [:]
     private var lastTransmissionMetrics: TransmissionMetrics?
+    private var metricsReportedAt: ContinuousClock.Instant?
+    private var progressNotifiedAt: ContinuousClock.Instant?
+    private var currentTransmissionMetrics: TransmissionMetrics? {
+        guard var metrics = lastTransmissionMetrics else { return nil }
+        if let phase = metrics.activePhase, let reportedAt = metricsReportedAt {
+            let duration = reportedAt.duration(to: ContinuousClock.now).components
+            let seconds = max(0, Double(duration.seconds) + Double(duration.attoseconds) / 1e18)
+            metrics.elapsedSeconds += seconds
+            metrics[keyPath: phase.duration] += seconds
+        }
+        return metrics
+    }
     private var task: Task<Void,Never>?
     private var busy = false
     private var suspended = false
@@ -104,6 +132,7 @@ import BridgeCore
             let began = clock.now
             lastJobTimings = ["queueWaitWallSeconds":max(0,Date().timeIntervalSince(job.created))]
             lastTransmissionMetrics = nil
+            progressNotifiedAt = nil
             var metrics: TransmissionMetrics?
             @MainActor func finish(_ state: JobState,error: String? = nil) throws {
                 let started = clock.now
@@ -136,7 +165,14 @@ import BridgeCore
                     let connecting = clock.now
                     try spool.transition(job.id,to: .connecting); status = "Connecting for \(pages.count) labels"; onChange?()
                     lastJobTimings["connectingPersistenceSeconds"] = elapsed(connecting)
-                    try await Transmission.send(pages: encoded,transport: printer,pacing: pacing,report:{ metrics = $0; self.lastTransmissionMetrics = $0 }) {
+                    try await Transmission.send(pages: encoded,transport: printer,pacing: pacing,report:{
+                        metrics = $0; self.lastTransmissionMetrics = $0
+                        let now = ContinuousClock.now
+                        self.metricsReportedAt = now
+                        if $0.activePhase == nil || self.progressNotifiedAt == nil || self.progressNotifiedAt!.duration(to: now) >= .seconds(1) {
+                            self.progressNotifiedAt = now; self.onChange?()
+                        }
+                    }) {
                         try self.spool.transition(job.id,to: .sending); self.status = "Sending — physical outcome unacknowledged"; self.onChange?()
                     }
                     try finish(.transmitted)
@@ -145,7 +181,7 @@ import BridgeCore
             } catch {
                 do {
                     let state = try spool.jobs().first { $0.id == job.id }?.state
-                    if state == .sending { try finish(.outcomeUnknown,error:"Transmission interrupted; duplicates possible; recover printer buffer before continuing") }
+                    if state == .sending { try finish(.outcomeUnknown,error:"Transmission interrupted: \(error). Duplicates possible; recover printer buffer before continuing") }
                     else if state == .connecting { try finish(Task.isCancelled ? .cancelled : .failedBeforeSend,error:String(describing:error)) }
                     else if state == .queued { try finish(.failedBeforeSend,error:"Stored job/capture failed: \(error); payload retained for review/retry") }
                 } catch { status = "Spool failure; quit/restart requires review: \(error)"; suspended = true; return }
@@ -161,8 +197,8 @@ import BridgeCore
             var inspectionDescription = "inspected localhost:631"
             if case .failure = inspection { inspectionDescription = "unavailable; ownership unknown" }
             var transmission: Any = NSNull()
-            if let metrics = lastTransmissionMetrics,let data = try? JSONEncoder().encode(metrics),let object = try? JSONSerialization.jsonObject(with:data) { transmission = object }
-            return Self.json(["application":"MUNBYN ITPP130B Bridge","version":"0.1.0-alpha.4","mode":dryRun ? "dry-run" : "BLE", "status":status,"bluetooth":printer.stateDescription,"bleStatus":printer.status,"bleTransport":printer.observedTransport,"pacingChunkCap":pacing.chunkCap,"pacingDelaySeconds":pacing.delay,"printerSelected":printer.profile != nil,"uncertainOutcomeBlocksPrinting":blocked,"loopback":"127.0.0.1:19100","queueInspection":inspectionDescription,"queueInstalled":snapshot != nil,"queueOwned":snapshot?.location == QueuePlan.marker && snapshot?.uri == QueuePlan.uri,"login":loginStatus,"lastJobTimingSeconds":lastJobTimings,"lastTransmissionMetrics":transmission,"jobs":jobs().map { ["id":$0.id.uuidString,"state":$0.state.rawValue,"pages":$0.pages] as [String:Any] }])
+            if let metrics = currentTransmissionMetrics,let data = try? JSONEncoder().encode(metrics),let object = try? JSONSerialization.jsonObject(with:data) { transmission = object }
+            return Self.json(["application":"MUNBYN ITPP130B Bridge","version":"0.1.0-alpha.5.debug","mode":dryRun ? "dry-run" : "BLE", "status":status,"bluetooth":printer.stateDescription,"bleStatus":printer.status,"bleTransport":printer.diagnostics,"pacingChunkCap":pacing.chunkCap,"pacingDelaySeconds":pacing.delay,"printerSelected":printer.profile != nil,"uncertainOutcomeBlocksPrinting":blocked,"loopback":"127.0.0.1:19100","queueInspection":inspectionDescription,"queueInstalled":snapshot != nil,"queueOwned":snapshot?.location == QueuePlan.marker && snapshot?.uri == QueuePlan.uri,"login":loginStatus,"lastJobTimingSeconds":lastJobTimings,"lastTransmissionMetrics":transmission,"jobs":jobs().map { ["id":$0.id.uuidString,"state":$0.state.rawValue,"pages":$0.pages] as [String:Any] }])
         case "scan":
             guard task == nil,!busy else { throw BridgeError.invalid("Printing/setup active") }
             busy = true; defer { busy = false; process() }
